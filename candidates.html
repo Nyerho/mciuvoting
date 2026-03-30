@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MCIU Candidates</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e3a8a',
+            secondary: '#f1f5f9'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="bg-secondary min-h-screen">
+
+<header class="bg-white shadow">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <h1 class="font-bold text-lg">MCIU Voting Portal</h1>
+    <a href="dashboard.html" class="text-primary text-sm">Back</a>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-10">
+
+  <h2 id="pageTitle" class="text-2xl font-semibold mb-6"></h2>
+
+  <div id="candidatesGrid" class="grid sm:grid-cols-2 md:grid-cols-3 gap-8"></div>
+
+</main>
+
+<!-- MODAL -->
+<div id="voteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+  <div class="bg-white rounded-xl p-6 max-w-sm w-full text-center">
+    <p id="confirmText" class="mb-6 text-gray-700"></p>
+    <div class="flex gap-4">
+      <button onclick="closeModal()" class="w-full border py-2 rounded">Cancel</button>
+      <button onclick="submitVote()" class="w-full bg-primary text-white py-2 rounded">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* ================== BASIC SETUP ================== */
+
+const params = new URLSearchParams(window.location.search);
+const position = params.get('position');
+
+const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
+  matric: 'TEMP001'
+};
+
+const electionData = JSON.parse(localStorage.getItem('electionData'));
+
+if (!electionData || electionData.status !== 'active') {
+  alert('Election is not active');
+  window.location.href = 'dashboard.html';
+}
+
+/* ================== LOAD CANDIDATES ================== */
+
+const candidates = electionData.positions[position];
+
+if (!candidates) {
+  alert('Invalid position');
+  window.location.href = 'dashboard.html';
+}
+
+document.getElementById('pageTitle').innerText = `Vote for ${position}`;
+
+const grid = document.getElementById('candidatesGrid');
+let selectedCandidateId = null;
+
+candidates.forEach(candidate => {
+  const card = document.createElement('div');
+  card.className = 'bg-white rounded-xl shadow p-6 text-center';
+
+  card.innerHTML = `
+    <img src="${candidate.image}" class="w-32 h-32 mx-auto rounded-full object-cover">
+    <h3 class="mt-4 font-semibold">${candidate.name}</h3>
+    <button class="mt-6 w-full bg-primary text-white py-2 rounded">
+      Vote
+    </button>
+  `;
+
+  card.querySelector('button').onclick = () => confirmVote(candidate.id);
+
+  grid.appendChild(card);
+});
+
+/* ================== VOTING ================== */
+
+function confirmVote(id) {
+  selectedCandidateId = id;
+  document.getElementById('confirmText').innerText =
+    `You are about to vote for this candidate as ${position}`;
+  document.getElementById('voteModal').classList.remove('hidden');
+  document.getElementById('voteModal').classList.add('flex');
+}
+
+window.closeModal = function () {
+  document.getElementById('voteModal').classList.add('hidden');
+  document.getElementById('voteModal').classList.remove('flex');
+};
+
+window.submitVote = function () {
+
+  const votes = JSON.parse(localStorage.getItem('votes')) || {};
+
+  if (votes[currentUser.matric]?.[position]) {
+    alert('You already voted for this position');
+    return;
+  }
+
+  // save voter record
+  if (!votes[currentUser.matric]) votes[currentUser.matric] = {};
+  votes[currentUser.matric][position] = selectedCandidateId;
+
+  localStorage.setItem('votes', JSON.stringify(votes));
+
+  // increment candidate vote
+  const candidate = candidates.find(c => c.id === selectedCandidateId);
+  candidate.votes++;
+
+  localStorage.setItem('electionData', JSON.stringify(electionData));
+
+  window.location.href = 'dashboard.html';
+};
+</script>
+
+</body>
+</html>

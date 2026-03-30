@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MCIU Student Voting Portal</title>
+
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#1e3a8a',
+        secondary: '#f1f5f9'
+      }
+    }
+  }
+}
+</script>
+
+<style>
+.fade-in {
+  animation: fadeIn 0.6s ease-in-out;
+}
+@keyframes fadeIn {
+  from {opacity:0; transform:translateY(10px);}
+  to {opacity:1; transform:translateY(0);}
+}
+</style>
+</head>
+<body class="bg-secondary text-gray-800">
+
+<!-- HEADER -->
+<header class="bg-white shadow-sm">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold">M</div>
+      <div>
+        <h1 class="text-lg font-semibold">MCIU Voting Portal</h1>
+        <p class="text-xs text-gray-500">Michael and Cecilia Ibru University</p>
+      </div>
+    </div>
+    <a href="login.html" class="bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Login</a>
+  </div>
+</header>
+
+<!-- HERO SECTION -->
+<section class="max-w-7xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-12 items-center">
+
+  <!-- Text -->
+  <div class="bg-white rounded-xl shadow p-6 fade-in">
+    <h2 class="text-4xl font-bold text-gray-900 leading-tight">
+      MCIU Student <br>
+      <span class="text-primary">Voting System</span>
+    </h2>
+    <p class="mt-6 text-gray-600 text-lg">
+      A secure, transparent, and easy-to-use voting platform for
+      Michael and Cecilia Ibru University student elections.
+    </p>
+    <div class="mt-8 flex items-center space-x-4">
+      <a href="login.html" id="proceedBtn" class="bg-primary text-white px-6 py-3 rounded-lg text-lg hover:bg-blue-900 transition">
+        Proceed to Vote
+      </a>
+      <span class="text-gray-500 text-sm">One Student • One Vote</span>
+    </div>
+    <div class="mt-10 grid grid-cols-3 gap-6 text-center">
+      <div class="bg-white rounded-xl p-4 shadow">
+        <p class="font-semibold">Secure</p>
+        <p class="text-xs text-gray-500">Encrypted votes</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow">
+        <p class="font-semibold">Transparent</p>
+        <p class="text-xs text-gray-500">Fair process</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow">
+        <p class="font-semibold">Reliable</p>
+        <p class="text-xs text-gray-500">University approved</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visual Card -->
+  <div class="bg-white rounded-2xl shadow-lg p-10 fade-in">
+    <h3 class="text-xl font-semibold mb-4">Election Status</h3>
+    <div class="space-y-4">
+      <div class="flex justify-between">
+        <span class="text-gray-600">Election:</span>
+        <span class="font-medium">Student Union Government</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-600">Status:</span>
+        <span id="statusText" class="font-semibold"></span>
+      </div>
+    </div>
+    <a href="login.html" id="statusBtn"
+       class="block text-center mt-8 bg-primary text-white py-3 rounded-lg hover:bg-blue-900 transition">
+      Vote Now
+    </a>
+  </div>
+
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-white border-t">
+  <div class="max-w-7xl mx-auto px-6 py-6 text-center text-sm text-gray-500">
+    © 2026 Michael and Cecilia Ibru University (MCIU).  
+    All rights reserved.
+  </div>
+</footer>
+
+<script>
+  // Make sure DOM is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    // Read the actual election status from localStorage
+    const electionStatus = localStorage.getItem('electionStatus') || 'closed';
+    const statusEl = document.getElementById('statusText');
+    const statusBtn = document.getElementById('statusBtn');
+    const proceedBtn = document.getElementById('proceedBtn');
+
+    if(electionStatus === 'active'){
+      statusEl.innerText = 'Active';
+      statusEl.className = 'text-green-600 font-semibold';
+      statusBtn.href = 'login.html';
+      proceedBtn.href = 'login.html';
+    } else {
+      statusEl.innerText = 'Closed';
+      statusEl.className = 'text-red-600 font-semibold';
+      // Disable vote buttons if election closed
+      statusBtn.classList.add('opacity-50', 'pointer-events-none', 'bg-gray-400');
+      proceedBtn.classList.add('opacity-50', 'pointer-events-none', 'bg-gray-400');
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCIU Login | Student Voting Portal</title>
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#1e3a8a',
+        secondary: '#f1f5f9'
+      }
+    }
+  }
+}
+</script>
+
+<style>
+.fade-in { animation: fadeIn 0.6s ease-in-out; }
+@keyframes fadeIn { from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);} }
+</style>
+</head>
+
+<body class="bg-secondary min-h-screen flex items-center justify-center">
+
+<div class="bg-white w-full max-w-md rounded-2xl shadow-lg p-8 fade-in">
+
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <div class="w-14 h-14 bg-primary text-white mx-auto flex items-center justify-center rounded-full text-2xl font-bold">M</div>
+    <h1 class="mt-4 text-2xl font-semibold">MCIU Login</h1>
+    <p class="text-sm text-gray-500">Michael and Cecilia Ibru University</p>
+  </div>
+
+  <!-- Login Form -->
+  <form class="space-y-5">
+
+    <!-- Matric Number -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Matric Number</label>
+      <input type="text" id="matric" placeholder="e.g. NS/CS/24/0936" required
+        class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
+    </div>
+
+    <!-- Password with eye toggle -->
+    <div class="relative">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+      <input type="password" id="password" placeholder="••••••••" required
+        class="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary pr-10" />
+      <button type="button" id="togglePassword" class="absolute inset-y-0 right-3 flex items-center text-gray-500">
+        <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Info -->
+    <div class="flex items-center justify-between text-sm">
+      <span class="text-gray-500">One student • One vote</span>
+      <a href="#" class="text-primary hover:underline">Forgot password?</a>
+    </div>
+
+    <!-- Login Button -->
+    <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg text-lg hover:bg-blue-900 transition">Login & Proceed</button>
+
+  </form>
+
+  <p class="mt-8 text-center text-xs text-gray-500">Authorized by MCIU Electoral Committee</p>
+</div>
+
+<script type="module">
+const form = document.querySelector('form');
+const passwordInput = document.getElementById('password');
+const togglePassword = document.getElementById('togglePassword');
+const eyeIcon = document.getElementById('eyeIcon');
+
+/* ===== PASSWORD TOGGLE ===== */
+togglePassword.addEventListener('click', () => {
+  const isHidden = passwordInput.type === 'password';
+  passwordInput.type = isHidden ? 'text' : 'password';
+  eyeIcon.innerHTML = isHidden
+    ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/>'
+    : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>';
+});
+
+/* ===== SUBMIT ===== */
+form.addEventListener('submit', e => {
+  e.preventDefault();
+
+  const matric = document.getElementById('matric').value.trim();
+  const password = passwordInput.value.trim();
+
+  // clear previous session
+  localStorage.removeItem('currentUser');
+
+  /* ===== ADMIN ===== */
+  if (matric.toLowerCase() === 'admin' && password === 'admin') {
+    localStorage.setItem('currentUser', JSON.stringify({
+      matric: 'ADMIN',
+      role: 'admin'
+    }));
+    window.location.href = 'admin.html';
+    return;
+  }
+
+  /* ===== STUDENT ===== */
+  const matricRegex = /^NS\/[A-Z]{2}\/\d{2}\/\d{4}$/i;
+
+  if (!matricRegex.test(matric) || password !== '1234') {
+    alert('Invalid matric number or password');
+    return;
+  }
+
+  // Check election status
+  const electionData = JSON.parse(localStorage.getItem('electionData'));
+  if (!electionData || electionData.status !== 'active') {
+    alert('Election is currently closed');
+    return;
+  }
+
+  localStorage.setItem('currentUser', JSON.stringify({
+    matric: matric.toUpperCase(),
+    role: 'student'
+  }));
+
+  window.location.href = 'dashboard.html';
+});
+</script>
+
+
+</body>
+</html>

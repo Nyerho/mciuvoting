@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MCIU Admin Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { primary:'#1e3a8a', secondary:'#f1f5f9' } } }
+}
+</script>
+</head>
+
+<body class="bg-secondary min-h-screen p-6">
+
+<div class="bg-white max-w-5xl mx-auto rounded-xl shadow p-6">
+
+<h1 class="text-2xl font-bold text-primary mb-4">Admin Dashboard</h1>
+
+<p class="mb-4">
+  Election Status:
+  <span id="statusText" class="font-semibold"></span>
+</p>
+
+<div class="flex gap-4 mb-6">
+  <button id="openBtn" class="bg-green-600 text-white px-4 py-2 rounded">Open Election</button>
+  <button id="closeBtn" class="bg-red-600 text-white px-4 py-2 rounded">Close Election</button>
+  <button id="resetBtn" class="bg-gray-700 text-white px-4 py-2 rounded">Reset Election</button>
+</div>
+
+<hr class="my-6">
+
+<h2 class="text-xl font-semibold mb-4">Add Candidate</h2>
+
+<div class="grid md:grid-cols-3 gap-4 mb-6">
+  <input id="candName" class="border p-2 rounded" placeholder="Candidate name">
+  <select id="candPosition" class="border p-2 rounded">
+    <option>President</option>
+    <option>Vice President</option>
+    <option>Secretary General</option>
+  </select>
+  <input id="candImage" type="file" accept="image/*" class="border p-2 rounded">
+</div>
+
+<button onclick="addCandidate()" class="bg-primary text-white px-6 py-2 rounded">
+  Add Candidate
+</button>
+
+<hr class="my-6">
+
+<h2 class="text-xl font-semibold mb-4">Candidates</h2>
+<div id="candidateList" class="grid md:grid-cols-3 gap-6"></div>
+
+</div>
+
+<script type="module">
+/* ========= ACCESS ========= */
+const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+if (!currentUser || currentUser.role !== 'admin') {
+  alert('Admins only');
+  window.location.href = 'login.html';
+}
+
+/* ========= INIT ========= */
+if (!localStorage.getItem('electionData')) {
+  localStorage.setItem('electionData', JSON.stringify({
+    status: 'closed',
+    positions: {
+      President: [],
+      'Vice President': [],
+      'Secretary General': []
+    }
+  }));
+}
+
+const data = () => JSON.parse(localStorage.getItem('electionData'));
+const save = d => localStorage.setItem('electionData', JSON.stringify(d));
+
+const statusText = document.getElementById('statusText');
+
+/* ========= STATUS ========= */
+function renderStatus() {
+  statusText.innerText = data().status === 'active' ? 'ACTIVE' : 'CLOSED';
+  statusText.className = data().status === 'active' ? 'text-green-600' : 'text-red-600';
+}
+renderStatus();
+
+/* ========= BUTTONS ========= */
+openBtn.onclick = () => { const d = data(); d.status='active'; save(d); renderStatus(); };
+closeBtn.onclick = () => { const d = data(); d.status='closed'; save(d); renderStatus(); };
+
+resetBtn.onclick = () => {
+  if (!confirm('Reset election?')) return;
+  const d = data();
+  for (const pos in d.positions) d.positions[pos] = [];
+  save(d);
+  localStorage.removeItem('votes');
+  renderCandidates();
+};
+
+/* ========= IMAGE ========= */
+function toBase64(file, cb){
+  const r = new FileReader();
+  r.onload = () => cb(r.result);
+  r.readAsDataURL(file);
+}
+
+/* ========= ADD ========= */
+window.addCandidate = () => {
+  if (!candName.value || !candImage.files[0]) return alert('Fill all fields');
+  toBase64(candImage.files[0], img => {
+    const d = data();
+    d.positions[candPosition.value].push({
+      id: Date.now(),
+      name: candName.value,
+      image: img,
+      votes: 0
+    });
+    save(d);
+    candName.value = '';
+    candImage.value = '';
+    renderCandidates();
+  });
+};
+
+/* ========= DELETE ========= */
+window.deleteCandidate = (pos, id) => {
+  const d = data();
+  d.positions[pos] = d.positions[pos].filter(c => c.id !== id);
+  save(d);
+  renderCandidates();
+};
+
+/* ========= RENDER ========= */
+function renderCandidates(){
+  const list = document.getElementById('candidateList');
+  list.innerHTML = '';
+  const d = data();
+  for (const pos in d.positions) {
+    d.positions[pos].forEach(c => {
+      list.innerHTML += `
+        <div class="border p-4 rounded text-center">
+          <img src="${c.image}" class="w-24 h-24 mx-auto rounded-full object-cover">
+          <h4 class="mt-2 font-semibold">${c.name}</h4>
+          <p class="text-sm">${pos}</p>
+          <p class="text-sm text-gray-500">Votes: ${c.votes}</p>
+          <button onclick="deleteCandidate('${pos}', ${c.id})"
+            class="text-red-600 text-sm mt-2">Delete</button>
+        </div>`;
+    });
+  }
+}
+renderCandidates();
+</script>
+
+</body>
+</html>

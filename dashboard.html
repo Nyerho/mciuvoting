@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCIU Dashboard | Student Voting Portal</title>
+
+<!-- Tailwind CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { primary:'#1e3a8a', secondary:'#f1f5f9' } } }
+}
+</script>
+
+<style>
+.fade-in { animation: fadeIn 0.6s ease-in-out; }
+@keyframes fadeIn { from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);} }
+</style>
+</head>
+
+<body class="bg-secondary min-h-screen">
+
+<header class="bg-white shadow-sm">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold">M</div>
+      <div>
+        <h1 class="font-semibold">MCIU Voting Portal</h1>
+        <p class="text-xs text-gray-500">Student Dashboard</p>
+      </div>
+    </div>
+    <a href="index.html" class="text-sm text-primary hover:underline">Logout</a>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-10">
+  <div class="mb-10">
+    <h2 class="text-2xl font-semibold">Welcome, Student 👋</h2>
+    <p class="text-gray-600">You are eligible to vote in the current MCIU election.</p>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-6 mb-12">
+    <div class="bg-white rounded-xl shadow p-6">
+      <p class="text-gray-500 text-sm">Election</p>
+      <h3 class="text-lg font-semibold mt-1">Student Union Government</h3>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+      <p class="text-gray-500 text-sm">Status</p>
+      <h3 id="votingStatus" class="text-lg font-semibold mt-1 text-green-600">Voting Active</h3>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+      <p class="text-gray-500 text-sm">Voting Progress</p>
+      <h3 id="progressStatus" class="text-lg font-semibold mt-1">Not Voted</h3>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-8">
+    <h3 class="text-xl font-semibold mb-6">Available Positions</h3>
+    <div class="space-y-4 fade-in">
+      <div class="flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card" data-position="President">
+        <div>
+          <h4 class="font-medium">President</h4>
+          <p class="text-sm text-gray-500">Lead the Student Union Government</p>
+        </div>
+        <a href="candidates.html?position=President" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
+      </div>
+
+      <div class="flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card" data-position="Vice President">
+        <div>
+          <h4 class="font-medium">Vice President</h4>
+          <p class="text-sm text-gray-500">Assist and support the President</p>
+        </div>
+        <a href="candidates.html?position=Vice%20President" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
+      </div>
+
+      <div class="flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card" data-position="Secretary General">
+        <div>
+          <h4 class="font-medium">Secretary General</h4>
+          <p class="text-sm text-gray-500">Manage records and communications</p>
+        </div>
+        <a href="candidates.html?position=Secretary%20General" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
+      </div>
+    </div>
+    <p class="mt-8 text-sm text-gray-500">⚠ Once you vote for a position, it cannot be changed.</p>
+  </div>
+
+</main>
+
+<footer class="bg-white border-t mt-12">
+  <div class="max-w-7xl mx-auto px-6 py-6 text-center text-sm text-gray-500">
+    © 2026 Michael and Cecilia Ibru University (MCIU).
+  </div>
+</footer>
+
+<script>
+/* ===== CURRENT USER ===== */
+const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
+  matric: 'TEMP001'
+};
+
+/* ===== ELECTION STATUS ===== */
+const electionStatus = localStorage.getItem('electionStatus') || 'active';
+const votingStatus = document.getElementById('votingStatus');
+
+if (electionStatus === 'active') {
+  votingStatus.innerText = 'Voting Active';
+  votingStatus.classList.add('text-green-600');
+} else {
+  votingStatus.innerText = 'Voting Closed';
+  votingStatus.classList.remove('text-green-600');
+  votingStatus.classList.add('text-red-600');
+}
+
+/* ===== VOTES STORAGE ===== */
+const votes = JSON.parse(localStorage.getItem('votes')) || {};
+const progress = document.getElementById('progressStatus');
+
+document.querySelectorAll('.position-card').forEach(card => {
+  const position = card.dataset.position;
+  const btn = card.querySelector('.vote-btn');
+
+  if (
+    currentUser &&
+    votes[currentUser.matric] &&
+    votes[currentUser.matric][position]
+  ) {
+    btn.innerText = 'Voted';
+    btn.classList.add('opacity-50', 'pointer-events-none');
+    progress.innerText = 'Partially Voted';
+  }
+
+  if (electionStatus !== 'active') {
+    btn.innerText = 'Closed';
+    btn.classList.add('opacity-50', 'pointer-events-none');
+  }
+});
+
+/* ===== ALL POSITIONS VOTED CHECK ===== */
+if (
+  votes[currentUser.matric] &&
+  Object.keys(votes[currentUser.matric]).length === 3
+) {
+  progress.innerText = 'All Positions Voted';
+}
+</script>
+
+
+</body>
+</html>
