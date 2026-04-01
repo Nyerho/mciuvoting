@@ -27,7 +27,7 @@ tailwind.config = {
       <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold">M</div>
       <div>
         <h1 class="font-semibold">MCIU Voting Portal</h1>
-        <p class="text-xs text-gray-500">Student Dashboard</p>
+        <p class="text-xs text-gray-500">Natural & Applied Sciences</p>
       </div>
     </div>
     <a href="index.html" class="text-sm text-primary hover:underline">Logout</a>
@@ -37,13 +37,13 @@ tailwind.config = {
 <main class="max-w-7xl mx-auto px-6 py-10">
   <div class="mb-10">
     <h2 class="text-2xl font-semibold">Welcome, Student 👋</h2>
-    <p class="text-gray-600">You are eligible to vote in the current MCIU election.</p>
+    <p class="text-gray-600">You are eligible to vote in the current Faculty election.</p>
   </div>
 
   <div class="grid md:grid-cols-3 gap-6 mb-12">
     <div class="bg-white rounded-xl shadow p-6">
       <p class="text-gray-500 text-sm">Election</p>
-      <h3 class="text-lg font-semibold mt-1">Student Union Government</h3>
+      <h3 class="text-lg font-semibold mt-1">Natural & Applied Sciences</h3>
     </div>
     <div class="bg-white rounded-xl shadow p-6">
       <p class="text-gray-500 text-sm">Status</p>
@@ -98,6 +98,9 @@ const progress = document.getElementById('progressStatus');
 const positionsList = document.getElementById('positionsList');
 
 if (!currentUser || !currentUser.matric || currentUser.role !== 'student') {
+  window.location.href = 'login.html';
+}
+if (String(currentUser.matric || '').toUpperCase().startsWith('NS') === false) {
   window.location.href = 'login.html';
 }
 
