@@ -110,10 +110,14 @@ form.addEventListener('submit', e => {
   }
 
   /* ===== STUDENT ===== */
-  const matricRegex = /^NS\/[A-Z]{2}\/\d{2}\/\d{4}$/i;
+  if (!matric) return alert('Enter your matric number');
+  if (!password) return alert('Enter your password');
 
-  if (!matricRegex.test(matric) || password !== '1234') {
-    alert('Invalid matric number or password');
+  const normalizedMatric = matric.replace(/\s+/g, '').toUpperCase();
+  const matricRegex = /^[A-Z0-9][A-Z0-9\/-]{3,}$/i;
+
+  if (!matricRegex.test(normalizedMatric)) {
+    alert('Invalid matric number format');
     return;
   }
 
@@ -125,7 +129,7 @@ form.addEventListener('submit', e => {
   }
 
   localStorage.setItem('currentUser', JSON.stringify({
-    matric: matric.toUpperCase(),
+    matric: normalizedMatric,
     role: 'student'
   }));
 
