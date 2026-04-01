@@ -91,6 +91,10 @@ function normalizePosition(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function safeDocId(value) {
+  return String(value || '').trim().replace(/[\/#?\[\]]/g, '_');
+}
+
 function safeErrorMessage(e) {
   try {
     if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) return 'You are offline. Please connect to the internet and try again.';
@@ -152,7 +156,7 @@ async function loadElectionAndCandidates() {
   }
 
   const voterP = withTimeout(
-    db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get(),
+    db.collection('voters').doc(safeDocId(String(currentUser?.matric || '').toUpperCase())).get(),
     6000
   ).catch(() => null);
   const electionP = withTimeout(

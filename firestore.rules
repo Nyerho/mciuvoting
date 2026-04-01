@@ -94,7 +94,7 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly(['matric', 'faculty', 'createdAt', 'lastLoginAt', 'completedAt']) &&
         isNonEmptyString(request.resource.data.matric, 40) &&
         request.resource.data.matric.matches('^NS.*') &&
-        request.resource.data.matric == voterId &&
+        voterId.matches('^[^/]+$') &&
         request.resource.data.faculty == 'NS';
 
       allow delete: if isAdmin();

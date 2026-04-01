@@ -105,6 +105,10 @@ function navigate(path) {
   }, 2000);
 }
 
+function safeDocId(value) {
+  return String(value || '').trim().replace(/[\/#?\[\]]/g, '_');
+}
+
 matricInput.addEventListener('input', () => {
   const v = String(matricInput.value || '').trim().toLowerCase();
   if (v === 'admin' || v.startsWith('admin@')) {
@@ -189,7 +193,7 @@ form.addEventListener('submit', e => {
   // Best-effort registration, non-blocking
   setTimeout(async () => {
     try {
-      const voterRef = db.collection('voters').doc(normalizedMatric);
+      const voterRef = db.collection('voters').doc(safeDocId(normalizedMatric));
       const now = firebase.firestore.FieldValue.serverTimestamp();
       await voterRef.set({
         matric: normalizedMatric,
