@@ -111,6 +111,9 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    try {
+      db.settings({ experimentalAutoDetectLongPolling: true });
+    } catch {}
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     if (!currentUser || currentUser.role !== 'admin') {
@@ -138,6 +141,15 @@
 
     let cachedPositions = [...defaultPositions];
 
+    async function enableOfflinePersistence() {
+      try {
+        await db.enablePersistence({ synchronizeTabs: true });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     function normalizePosition(value) {
       return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     }
@@ -148,6 +160,7 @@
 
     function safeErrorMessage(e) {
       try {
+        if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) return 'You are offline. Please connect to the internet and try again.';
         const code = e && e.code ? String(e.code) : '';
         const msg = e && e.message ? String(e.message) : '';
         if (code && msg) return `${code}: ${msg}`;
@@ -410,11 +423,13 @@
       try {
         const docId = candidateDocId(positionKey, nameKey);
         const ref = db.collection('candidates').doc(docId);
-        const existing = await ref.get();
-        if (existing.exists) {
-          showToast(`Candidate "${name}" already exists for ${position}.`, 'error');
-          return;
-        }
+        try {
+          const existing = await ref.get();
+          if (existing.exists) {
+            showToast(`Candidate "${name}" already exists for ${position}.`, 'error');
+            return;
+          }
+        } catch {}
 
         let image = null;
         if (file) {
@@ -550,6 +565,7 @@
     }
 
     async function refreshAll() {
+      await enableOfflinePersistence();
       renderPositionOptions();
       await ensureElectionDoc();
       renderPositionOptions();
