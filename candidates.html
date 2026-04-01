@@ -52,7 +52,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 try {
-  db.settings({ experimentalAutoDetectLongPolling: true });
+  db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 } catch {}
 
 /* ================== BASIC SETUP ================== */
@@ -105,6 +105,13 @@ let selectedCandidateId = null;
 let selectedCandidateName = null;
 let candidates = [];
 
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+  ]);
+}
+
 // Render skeleton cards immediately to avoid perceived delay
 (function renderSkeleton() {
   grid.innerHTML = '';
@@ -125,10 +132,22 @@ let candidates = [];
 async function loadElectionAndCandidates() {
   const positionKey = normalizePosition(position);
 
-  const voterP = db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get().catch(() => null);
-  const electionP = db.collection('election').doc('current').get().catch(() => null);
-  const byKeyP = db.collection('candidates').where('positionKey', '==', positionKey).get().catch(() => null);
-  const legacyP = db.collection('candidates').where('position', '==', position).get().catch(() => null);
+  const voterP = withTimeout(
+    db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get(),
+    6000
+  ).catch(() => null);
+  const electionP = withTimeout(
+    db.collection('election').doc('current').get(),
+    6000
+  ).catch(() => null);
+  const byKeyP = withTimeout(
+    db.collection('candidates').where('positionKey', '==', positionKey).get(),
+    8000
+  ).catch(() => null);
+  const legacyP = withTimeout(
+    db.collection('candidates').where('position', '==', position).get(),
+    8000
+  ).catch(() => null);
 
   const [voterSnap, electionSnap, byKeySnap, legacySnap] = await Promise.all([voterP, electionP, byKeyP, legacyP]);
 
@@ -193,6 +212,16 @@ async function loadElectionAndCandidates() {
   candidates = list;
 
   grid.innerHTML = '';
+  if (!byKeySnap && !legacySnap) {
+    grid.innerHTML = `
+      <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
+        <h3 class="font-semibold text-lg">Could not load candidates</h3>
+        <p class="text-gray-600 mt-1">Check your internet connection and refresh.</p>
+        <button class="mt-4 bg-primary text-white px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
+      </div>
+    `;
+    return;
+  }
   if (!candidates.length) {
     grid.innerHTML = `
       <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
