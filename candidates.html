@@ -105,25 +105,47 @@ let selectedCandidateId = null;
 let selectedCandidateName = null;
 let candidates = [];
 
+// Render skeleton cards immediately to avoid perceived delay
+(function renderSkeleton() {
+  grid.innerHTML = '';
+  const count = 6;
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-xl shadow p-6 text-center animate-pulse';
+    card.innerHTML = `
+      <div class="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-full bg-gray-200"></div>
+      <div class="mt-4 h-4 bg-gray-200 rounded mx-auto" style="width: 60%"></div>
+      <div class="mt-2 h-4 bg-gray-200 rounded mx-auto" style="width: 40%"></div>
+      <button class="mt-6 w-full border bg-gray-200 text-transparent py-2 rounded" disabled>Vote</button>
+    `;
+    grid.appendChild(card);
+  }
+})();
+
 async function loadElectionAndCandidates() {
-  try {
-    const voterSnap = await db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get();
-    if (voterSnap.exists) {
-      const voter = voterSnap.data() || {};
-      if (voter.completedAt) {
-        localStorage.removeItem('currentUser');
-        alert('This matric number has already completed voting and cannot login again.');
-        window.location.href = 'login.html';
-        return;
-      }
+  const positionKey = normalizePosition(position);
+
+  const voterP = db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get().catch(() => null);
+  const electionP = db.collection('election').doc('current').get().catch(() => null);
+  const byKeyP = db.collection('candidates').where('positionKey', '==', positionKey).get().catch(() => null);
+  const legacyP = db.collection('candidates').where('position', '==', position).get().catch(() => null);
+
+  const [voterSnap, electionSnap, byKeySnap, legacySnap] = await Promise.all([voterP, electionP, byKeyP, legacyP]);
+
+  if (voterSnap && voterSnap.exists) {
+    const voter = voterSnap.data() || {};
+    if (voter.completedAt) {
+      localStorage.removeItem('currentUser');
+      alert('This matric number has already completed voting and cannot login again.');
+      window.location.href = 'login.html';
+      return;
     }
-  } catch {}
+  }
 
   let election = null;
-  try {
-    const electionSnap = await db.collection('election').doc('current').get();
-    election = electionSnap.exists ? electionSnap.data() : null;
-  } catch {
+  if (electionSnap && electionSnap.exists) {
+    election = electionSnap.data();
+  } else {
     election = { status: 'active', positions: [position] };
   }
 
@@ -141,37 +163,30 @@ async function loadElectionAndCandidates() {
     return;
   }
 
-  const positionKey = normalizePosition(position);
   const list = [];
-
-  try {
-    const snapByKey = await db.collection('candidates').where('positionKey', '==', positionKey).get();
-    snapByKey.forEach(d => {
-      const c = d.data();
+  if (byKeySnap && !byKeySnap.empty) {
+    byKeySnap.forEach(d => {
+      const c = d.data() || {};
       list.push({
         id: d.id,
-        name: c?.name || '',
-        position: c?.position || position,
-        image: c?.image || null,
-        votes: c?.votes ?? 0
+        name: c.name || '',
+        position: c.position || position,
+        image: c.image || null,
+        votes: c.votes ?? 0
       });
     });
-  } catch {}
-
-  if (!list.length) {
-    try {
-      const snapLegacy = await db.collection('candidates').where('position', '==', position).get();
-      snapLegacy.forEach(d => {
-        const c = d.data();
-        list.push({
-          id: d.id,
-          name: c?.name || '',
-          position: c?.position || position,
-          image: c?.image || null,
-          votes: c?.votes ?? 0
-        });
+  }
+  if (!list.length && legacySnap && !legacySnap.empty) {
+    legacySnap.forEach(d => {
+      const c = d.data() || {};
+      list.push({
+        id: d.id,
+        name: c.name || '',
+        position: c.position || position,
+        image: c.image || null,
+        votes: c.votes ?? 0
       });
-    } catch {}
+    });
   }
 
   list.sort((a, b) => a.name.localeCompare(b.name));
@@ -194,7 +209,7 @@ async function loadElectionAndCandidates() {
     const image = candidate.image || avatarDataUri(candidate.name);
 
     card.innerHTML = `
-      <img src="${image}" class="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-full object-cover">
+      <img src="${image}" loading="lazy" class="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-full object-cover">
       <h3 class="mt-4 font-semibold">${candidate.name}</h3>
       <button class="mt-6 w-full bg-primary text-white py-2 rounded">
         Vote
@@ -217,8 +232,10 @@ function confirmVote(id) {
   selectedCandidateName = candidates.find(c => c.id === id)?.name || '';
   document.getElementById('confirmText').innerText =
     `You are about to vote for this candidate as ${position}`;
-  document.getElementById('voteModal').classList.remove('hidden');
-  document.getElementById('voteModal').classList.add('flex');
+  requestAnimationFrame(() => {
+    document.getElementById('voteModal').classList.remove('hidden');
+    document.getElementById('voteModal').classList.add('flex');
+  });
 }
 
 window.closeModal = function () {
@@ -243,9 +260,11 @@ window.submitVote = function () {
 
   (async () => {
     const positionKey = normalizePosition(position);
-    const voteId = `${matric}_${positionKey}`;
+    const safeMatric = matric.replace(/[\/#?\[\]]/g, '_');
+    const safePositionKey = positionKey.replace(/[\/#?\[\]]/g, '_');
+    const voteId = `${safeMatric}_${safePositionKey}`;
     const voteRef = db.collection('votes').doc(voteId);
-    const legacyVoteId = `${matric}_${position}`;
+    const legacyVoteId = `${safeMatric}_${position.replace(/[\/#?\[\]]/g, '_')}`;
     const legacyVoteRef = legacyVoteId === voteId ? null : db.collection('votes').doc(legacyVoteId);
     const candidateRef = db.collection('candidates').doc(selectedCandidateId);
 

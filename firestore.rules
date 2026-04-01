@@ -78,7 +78,7 @@ service cloud.firestore {
         request.resource.data.matric.matches('^NS.*') &&
         isNonEmptyString(request.resource.data.position, 120) &&
         isPositionKey(request.resource.data.positionKey) &&
-        (request.resource.data.matric + '_' + request.resource.data.positionKey) == voteId &&
+        voteId.matches('^[^/]+$') &&
         isNonEmptyString(request.resource.data.candidateId, 200) &&
         request.resource.data.candidateName is string &&
         request.resource.data.candidateName.size() <= 120;
