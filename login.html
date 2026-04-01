@@ -92,6 +92,15 @@ function resetSubmit() {
   submitBtn.classList.remove('opacity-50', 'pointer-events-none');
   submitBtn.innerText = 'Login & Proceed';
 }
+function navigate(path) {
+  try {
+    window.location.assign(path);
+  } catch {}
+  setTimeout(() => {
+    // fallback in case navigation is blocked
+    resetSubmit();
+  }, 2000);
+}
 
 matricInput.addEventListener('input', () => {
   const v = String(matricInput.value || '').trim().toLowerCase();
@@ -133,7 +142,7 @@ form.addEventListener('submit', e => {
       matric: 'ADMIN',
       role: 'admin'
     }));
-    window.location.href = 'admin.html';
+    navigate('admin.html');
     return;
   }
 
@@ -198,8 +207,7 @@ form.addEventListener('submit', e => {
       matric: normalizedMatric,
       role: 'student'
     }));
-
-    window.location.href = 'dashboard.html';
+    navigate('dashboard.html');
   })().catch((err) => {
     alert(err?.message || 'Could not login. Please try again.');
     resetSubmit();
