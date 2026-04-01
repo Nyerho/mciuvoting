@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="tailwind.css">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
 <style>
 .fade-in { animation: fadeIn 0.6s ease-in-out; }
@@ -74,10 +75,13 @@ const firebaseConfig = {
   measurementId: "G-P0FT8RQLN3"
 };
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.firestore();
 try {
-  db.settings({ experimentalAutoDetectLongPolling: true });
+  db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 } catch {}
+
+const ADMIN_EMAIL = 'admin@mciuvoting.com';
 
 const form = document.querySelector('form');
 const matricInput = document.getElementById('matric');
@@ -103,7 +107,7 @@ function navigate(path) {
 
 matricInput.addEventListener('input', () => {
   const v = String(matricInput.value || '').trim().toLowerCase();
-  if (v === 'admin') {
+  if (v === 'admin' || v.startsWith('admin@')) {
     adminPasswordWrap.classList.remove('hidden');
     passwordInput.focus();
   } else {
@@ -134,14 +138,29 @@ form.addEventListener('submit', e => {
 
   // clear previous session
   localStorage.removeItem('currentUser');
+  try { auth.signOut(); } catch {}
 
   /* ===== ADMIN ===== */
-  if (matric.toLowerCase() === 'admin' && password === 'admin') {
-    localStorage.setItem('currentUser', JSON.stringify({
-      matric: 'ADMIN',
-      role: 'admin'
-    }));
-    navigate('admin.html');
+  if (matric.toLowerCase() === 'admin' || matric.toLowerCase().startsWith('admin@')) {
+    (async () => {
+      if (!password) {
+        alert('Enter admin password');
+        resetSubmit();
+        return;
+      }
+      const email = matric.toLowerCase() === 'admin' ? ADMIN_EMAIL : matric.trim();
+      const cred = await auth.signInWithEmailAndPassword(email, password);
+      const uid = cred?.user?.uid || '';
+      localStorage.setItem('currentUser', JSON.stringify({
+        matric: 'ADMIN',
+        role: 'admin',
+        uid
+      }));
+      navigate('admin.html');
+    })().catch((e) => {
+      alert(e?.message || 'Admin login failed');
+      resetSubmit();
+    });
     return;
   }
 
