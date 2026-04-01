@@ -14,6 +14,8 @@
 
 <h1 class="text-2xl font-bold text-primary mb-4">Admin Dashboard</h1>
 
+<div id="toast" class="hidden mb-4 rounded-lg px-4 py-3 text-sm"></div>
+
 <p class="mb-4">
   Election Status:
   <span id="statusText" class="font-semibold"></span>
@@ -45,7 +47,7 @@
   <input id="candImage" type="file" accept="image/*" class="border p-2 rounded w-full">
 </div>
 
-<button onclick="addCandidate()" class="bg-primary text-white px-6 py-2 rounded">
+<button id="addCandidateBtn" onclick="addCandidate()" class="bg-primary text-white px-6 py-2 rounded w-full sm:w-auto">
   Add Candidate
 </button>
 
@@ -126,9 +128,38 @@ const addPositionBtn = document.getElementById('addPositionBtn');
 const candName = document.getElementById('candName');
 const candPosition = document.getElementById('candPosition');
 const candImage = document.getElementById('candImage');
+const addCandidateBtn = document.getElementById('addCandidateBtn');
+const toast = document.getElementById('toast');
 
 function normalizePosition(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function normalizeCandidateName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function showToast(message, type = 'success') {
+  if (!toast) return;
+  toast.classList.remove('hidden', 'bg-green-50', 'text-green-800', 'border', 'border-green-200', 'bg-red-50', 'text-red-800', 'border-red-200');
+  if (type === 'error') {
+    toast.classList.add('bg-red-50', 'text-red-800', 'border', 'border-red-200');
+  } else {
+    toast.classList.add('bg-green-50', 'text-green-800', 'border', 'border-green-200');
+  }
+  toast.textContent = message;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => {
+    toast.classList.add('hidden');
+  }, 3500);
+}
+
+function setAddCandidateLoading(isLoading) {
+  if (!addCandidateBtn) return;
+  addCandidateBtn.disabled = isLoading;
+  addCandidateBtn.classList.toggle('opacity-50', isLoading);
+  addCandidateBtn.classList.toggle('pointer-events-none', isLoading);
+  addCandidateBtn.textContent = isLoading ? 'Adding...' : 'Add Candidate';
 }
 
 function toBase64(file, cb){
@@ -267,15 +298,31 @@ window.addCandidate = () => {
   const file = candImage.files?.[0];
   const position = candPosition.value;
   const positionKey = normalizePosition(position);
+  const nameKey = normalizeCandidateName(name);
 
   if (!name) return alert('Enter candidate name');
   if (!position) return alert('Select position');
   if (!positionKey) return alert('Select position');
+  if (!nameKey) return alert('Enter candidate name');
 
-  const addWithImage = (img) => {
-    (async () => {
+  const addWithImage = async (img) => {
+    setAddCandidateLoading(true);
+    try {
+      const existing = await db.collection('candidates').where('positionKey', '==', positionKey).get();
+      let isDuplicate = false;
+      existing.forEach(s => {
+        const c = s.data() || {};
+        const existingKey = normalizeCandidateName(c.nameKey || c.name);
+        if (existingKey && existingKey === nameKey) isDuplicate = true;
+      });
+      if (isDuplicate) {
+        showToast(`Candidate "${name}" already exists for ${position}.`, 'error');
+        return;
+      }
+
       await db.collection('candidates').add({
         name,
+        nameKey,
         position,
         positionKey,
         image: img || avatarDataUri(name),
@@ -283,12 +330,17 @@ window.addCandidate = () => {
       });
       candName.value = '';
       candImage.value = '';
+      showToast(`Candidate added: ${name}`);
       await renderCandidates();
-    })().catch(() => alert('Could not add candidate'));
+    } catch (e) {
+      showToast('Could not add candidate. Please try again.', 'error');
+    } finally {
+      setAddCandidateLoading(false);
+    }
   };
 
   if (file) {
-    toBase64(file, addWithImage);
+    toBase64(file, (img) => addWithImage(img));
     return;
   }
 
