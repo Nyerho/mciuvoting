@@ -52,7 +52,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 try {
-  db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
+  db.settings({ experimentalForceLongPolling: true, merge: true });
 } catch {}
 
 /* ================== BASIC SETUP ================== */
@@ -89,6 +89,21 @@ function avatarDataUri(name) {
 
 function normalizePosition(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function safeErrorMessage(e) {
+  try {
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) return 'You are offline. Please connect to the internet and try again.';
+    const code = e && e.code ? String(e.code) : '';
+    const msg = e && e.message ? String(e.message) : '';
+    if (msg === 'OFFLINE') return 'You are offline. Please connect to the internet and try again.';
+    if (code && msg) return `${code}: ${msg}`;
+    if (msg) return msg;
+    if (code) return code;
+    return 'Unknown error';
+  } catch {
+    return 'Unknown error';
+  }
 }
 
 const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {};
@@ -131,6 +146,10 @@ function withTimeout(promise, timeoutMs) {
 
 async function loadElectionAndCandidates() {
   const positionKey = normalizePosition(position);
+
+  if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+    throw new Error('OFFLINE');
+  }
 
   const voterP = withTimeout(
     db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get(),
@@ -213,14 +232,45 @@ async function loadElectionAndCandidates() {
 
   grid.innerHTML = '';
   if (!byKeySnap && !legacySnap) {
+    const allSnap = await withTimeout(db.collection('candidates').get(), 8000).catch(() => null);
+    if (allSnap) {
+      const fallback = [];
+      allSnap.forEach((d) => {
+        const c = d.data() || {};
+        const key = normalizePosition(c.positionKey || c.position);
+        if (key !== positionKey) return;
+        fallback.push({
+          id: d.id,
+          name: c.name || '',
+          position: c.position || position,
+          image: c.image || null,
+          votes: c.votes ?? 0
+        });
+      });
+      fallback.sort((a, b) => a.name.localeCompare(b.name));
+      candidates = fallback;
+      if (candidates.length) {
+        grid.innerHTML = '';
+      } else {
+        grid.innerHTML = `
+          <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
+            <h3 class="font-semibold text-lg">No nominated candidates yet</h3>
+            <p class="text-gray-600 mt-1">The admin has not added nominees for ${position}.</p>
+            <a href="dashboard.html" class="inline-block mt-4 text-primary">Back to positions</a>
+          </div>
+        `;
+        return;
+      }
+    } else {
     grid.innerHTML = `
-      <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
-        <h3 class="font-semibold text-lg">Could not load candidates</h3>
-        <p class="text-gray-600 mt-1">Check your internet connection and refresh.</p>
-        <button class="mt-4 bg-primary text-white px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
-      </div>
-    `;
-    return;
+        <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
+          <h3 class="font-semibold text-lg">Could not load candidates</h3>
+          <p class="text-gray-600 mt-1">Check your internet connection and refresh.</p>
+          <button class="mt-4 bg-primary text-white px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
+        </div>
+      `;
+      return;
+    }
   }
   if (!candidates.length) {
     grid.innerHTML = `
@@ -250,8 +300,14 @@ async function loadElectionAndCandidates() {
   });
 }
 
-loadElectionAndCandidates().catch(() => {
-  alert('Could not load candidates. Please try again.');
+loadElectionAndCandidates().catch((e) => {
+  grid.innerHTML = `
+    <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
+      <h3 class="font-semibold text-lg">Could not load candidates</h3>
+      <p class="text-gray-600 mt-1">${safeErrorMessage(e)}</p>
+      <button class="mt-4 bg-primary text-white px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
+    </div>
+  `;
 });
 
 /* ================== VOTING ================== */
