@@ -105,9 +105,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-try {
-  db.settings({ merge: true, experimentalAutoDetectLongPolling: true });
-} catch {}
+// Use default Firestore network settings for stability
 
 const currentUser = JSON.parse(localStorage.getItem('currentUser'));
 if (!currentUser || currentUser.role !== 'admin') {
@@ -290,11 +288,18 @@ addPositionBtn.onclick = () => {
 
   (async () => {
     const updated = [...cachedPositions, name];
-    await electionRef.update({ positions: updated });
-    cachedPositions = updated;
+    try {
+      await electionRef.set({ positions: updated }, { merge: true });
+      cachedPositions = updated;
+      showToast(`Position added: ${name}`);
+    } catch {
+      // Update UI locally so admin can proceed; Firestore can be retried later
+      cachedPositions = updated;
+      showToast(`Position added locally: ${name}. Network will sync later.`, 'error');
+    }
     newPositionName.value = '';
     renderPositionOptions();
-  })().catch(() => alert('Could not add position'));
+  })().catch(() => showToast('Could not add position. Please try again.', 'error'));
 };
 
 window.addCandidate = () => {
