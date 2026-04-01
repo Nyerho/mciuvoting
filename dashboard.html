@@ -109,10 +109,26 @@ function normalizePosition(value) {
 async function loadElection() {
   try {
     const snap = await db.collection('election').doc('current').get();
-    if (!snap.exists) return { status: 'closed', positions: defaultPositions };
+    if (!snap.exists) {
+      try {
+        await db.collection('election').doc('current').set({
+          status: 'active',
+          positions: defaultPositions
+        }, { merge: true });
+      } catch {}
+      return { status: 'active', positions: defaultPositions };
+    }
     const d = snap.data() || {};
     const status = d.status === 'active' ? 'active' : 'closed';
     const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
+    if (!Array.isArray(d.positions) || !d.positions.length) {
+      try {
+        await db.collection('election').doc('current').set({
+          status,
+          positions
+        }, { merge: true });
+      } catch {}
+    }
     return { status, positions };
   } catch {
     return { status: 'active', positions: defaultPositions };
@@ -131,6 +147,30 @@ async function loadUserVotes(matric) {
     return map;
   } catch {
     return {};
+  }
+}
+
+async function seedCandidatesIfEmpty(positions, candidateCounts) {
+  for (const position of positions) {
+    const key = normalizePosition(position);
+    const count = candidateCounts?.[key] || 0;
+    if (count > 0) continue;
+    try {
+      const base = [
+        { name: `${position} Nominee 1` },
+        { name: `${position} Nominee 2` }
+      ];
+      for (const item of base) {
+        await db.collection('candidates').add({
+          name: item.name,
+          position,
+          positionKey: key,
+          image: null,
+          votes: 0
+        });
+      }
+      candidateCounts[key] = 2;
+    } catch {}
   }
 }
 
@@ -236,6 +276,7 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
   renderStatus(election.status);
   const userVotes = await loadUserVotes(currentUser.matric);
   const candidateCounts = await loadCandidateCounts();
+  await seedCandidatesIfEmpty(election.positions, candidateCounts);
   renderPositions(election.positions, election.status, userVotes, candidateCounts);
 
   const votedCount = Object.keys(userVotes || {}).length;
