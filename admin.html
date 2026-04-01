@@ -315,18 +315,20 @@ window.addCandidate = () => {
 
   const addWithImage = async (img) => {
     try {
-      const existing = await db.collection('candidates').where('positionKey', '==', positionKey).get();
       let isDuplicate = false;
-      existing.forEach(s => {
-        const c = s.data() || {};
-        const existingKey = normalizeCandidateName(c.nameKey || c.name);
-        if (existingKey && existingKey === nameKey) isDuplicate = true;
-      });
+      try {
+        const existing = await db.collection('candidates').where('positionKey', '==', positionKey).get();
+        existing.forEach(s => {
+          const c = s.data() || {};
+          const existingKey = normalizeCandidateName(c.nameKey || c.name);
+          if (existingKey && existingKey === nameKey) isDuplicate = true;
+        });
+      } catch {}
       if (isDuplicate) {
         showToast(`Candidate "${name}" already exists for ${position}.`, 'error');
+        setAddCandidateLoading(false);
         return;
       }
-
       await db.collection('candidates').add({
         name,
         nameKey,
