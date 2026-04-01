@@ -104,7 +104,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 try {
-  db.settings({ experimentalAutoDetectLongPolling: true });
+  db.settings({ merge: true, experimentalAutoDetectLongPolling: true });
 } catch {}
 
 const currentUser = JSON.parse(localStorage.getItem('currentUser'));
@@ -117,6 +117,15 @@ const defaultPositions = ['President', 'Vice President', 'Secretary General'];
 const electionRef = db.collection('election').doc('current');
 const statusText = document.getElementById('statusText');
 let cachedPositions = defaultPositions;
+
+const openBtn = document.getElementById('openBtn');
+const closeBtn = document.getElementById('closeBtn');
+const resetBtn = document.getElementById('resetBtn');
+const newPositionName = document.getElementById('newPositionName');
+const addPositionBtn = document.getElementById('addPositionBtn');
+const candName = document.getElementById('candName');
+const candPosition = document.getElementById('candPosition');
+const candImage = document.getElementById('candImage');
 
 function normalizePosition(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
