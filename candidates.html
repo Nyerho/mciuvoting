@@ -55,6 +55,30 @@
 const params = new URLSearchParams(window.location.search);
 const position = params.get('position');
 
+function getInitials(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '';
+  return (first + last).toUpperCase() || 'U';
+}
+
+function hashToHue(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  return hash % 360;
+}
+
+function avatarDataUri(name) {
+  const initials = getInitials(name);
+  const hue = hashToHue(String(name || 'User'));
+  const bg = `hsl(${hue} 70% 45%)`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" rx="128" fill="${bg}"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="96" fill="#fff" font-weight="700">${initials}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
   matric: 'TEMP001'
 };
@@ -83,9 +107,10 @@ let selectedCandidateId = null;
 candidates.forEach(candidate => {
   const card = document.createElement('div');
   card.className = 'bg-white rounded-xl shadow p-6 text-center';
+  const image = candidate.image || avatarDataUri(candidate.name);
 
   card.innerHTML = `
-    <img src="${candidate.image}" class="w-32 h-32 mx-auto rounded-full object-cover">
+    <img src="${image}" class="w-32 h-32 mx-auto rounded-full object-cover">
     <h3 class="mt-4 font-semibold">${candidate.name}</h3>
     <button class="mt-6 w-full bg-primary text-white py-2 rounded">
       Vote
@@ -129,7 +154,7 @@ window.submitVote = function () {
 
   // increment candidate vote
   const candidate = candidates.find(c => c.id === selectedCandidateId);
-  candidate.votes++;
+  candidate.votes = (candidate.votes ?? 0) + 1;
 
   localStorage.setItem('electionData', JSON.stringify(electionData));
 
