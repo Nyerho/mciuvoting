@@ -16,19 +16,19 @@
 <body class="bg-secondary min-h-screen">
 
 <header class="bg-white shadow-sm">
-  <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-    <div class="flex items-center space-x-3">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+    <div class="flex items-center gap-3">
       <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold">M</div>
       <div>
         <h1 class="font-semibold">MCIU Voting Portal</h1>
         <p class="text-xs text-gray-500">Natural & Applied Sciences</p>
       </div>
     </div>
-    <a href="index.html" class="text-sm text-primary hover:underline">Logout</a>
+    <a href="index.html" class="text-sm text-primary hover:underline w-full sm:w-auto text-center">Logout</a>
   </div>
 </header>
 
-<main class="max-w-7xl mx-auto px-6 py-10">
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
   <div class="mb-10">
     <h2 class="text-2xl font-semibold">Welcome, Student 👋</h2>
     <p class="text-gray-600">You are eligible to vote in the current Faculty election.</p>
@@ -209,7 +209,7 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
     const positionKey = normalizePosition(position);
     const count = candidateCounts?.[positionKey] || 0;
     const card = document.createElement('div');
-    card.className = 'flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card';
+    card.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border rounded-lg p-4 hover:bg-secondary transition position-card';
     card.dataset.position = position;
     card.dataset.positionKey = positionKey;
 
@@ -219,7 +219,7 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
         <h4 class="font-medium">${position}</h4>
         <p class="text-sm text-gray-500">${count ? `${count} nominated candidate${count === 1 ? '' : 's'}` : 'No nominated candidates yet'}</p>
       </div>
-      <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
+      <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition w-full sm:w-auto text-center">Vote</a>
     `;
 
     positionsList.appendChild(card);

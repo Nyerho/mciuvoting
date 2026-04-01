@@ -8,9 +8,9 @@
 <link rel="stylesheet" href="tailwind.css">
 </head>
 
-<body class="bg-secondary min-h-screen p-6">
+<body class="bg-secondary min-h-screen p-4 sm:p-6">
 
-<div class="bg-white max-w-5xl mx-auto rounded-xl shadow p-6">
+<div class="bg-white max-w-5xl mx-auto rounded-xl shadow p-4 sm:p-6">
 
 <h1 class="text-2xl font-bold text-primary mb-4">Admin Dashboard</h1>
 
@@ -19,10 +19,10 @@
   <span id="statusText" class="font-semibold"></span>
 </p>
 
-<div class="flex gap-4 mb-6">
-  <button id="openBtn" class="bg-green-600 text-white px-4 py-2 rounded">Open Election</button>
-  <button id="closeBtn" class="bg-red-600 text-white px-4 py-2 rounded">Close Election</button>
-  <button id="resetBtn" class="bg-gray-700 text-white px-4 py-2 rounded">Reset Election</button>
+<div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 mb-6">
+  <button id="openBtn" class="bg-green-600 text-white px-4 py-2 rounded w-full sm:w-auto">Open Election</button>
+  <button id="closeBtn" class="bg-red-600 text-white px-4 py-2 rounded w-full sm:w-auto">Close Election</button>
+  <button id="resetBtn" class="bg-gray-700 text-white px-4 py-2 rounded w-full sm:w-auto">Reset Election</button>
 </div>
 
 <hr class="my-6">
@@ -38,7 +38,7 @@
 
 <h2 class="text-xl font-semibold mb-4">Add Candidate</h2>
 
-<div class="grid md:grid-cols-3 gap-4 mb-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
   <input id="candName" class="border p-2 rounded" placeholder="Candidate name">
   <select id="candPosition" class="border p-2 rounded">
   </select>
@@ -52,18 +52,18 @@
 <hr class="my-6">
 
 <h2 class="text-xl font-semibold mb-4">Candidates</h2>
-<div id="candidateList" class="grid md:grid-cols-3 gap-6"></div>
+<div id="candidateList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
 
 <hr class="my-6">
 
 <h2 class="text-xl font-semibold mb-4">Vote Records</h2>
 <div class="overflow-auto border rounded">
-  <table class="w-full text-sm">
+  <table class="w-full text-sm min-w-max">
     <thead class="bg-secondary text-left">
       <tr>
-        <th class="p-3">Matric No</th>
-        <th class="p-3">Position</th>
-        <th class="p-3">Voted For</th>
+        <th class="p-3 whitespace-nowrap">Matric No</th>
+        <th class="p-3 whitespace-nowrap">Position</th>
+        <th class="p-3 whitespace-nowrap">Voted For</th>
       </tr>
     </thead>
     <tbody id="votesTableBody"></tbody>
@@ -74,12 +74,12 @@
 
 <h2 class="text-xl font-semibold mb-4">Registered Voters</h2>
 <div class="overflow-auto border rounded">
-  <table class="w-full text-sm">
+  <table class="w-full text-sm min-w-max">
     <thead class="bg-secondary text-left">
       <tr>
-        <th class="p-3">Matric No</th>
-        <th class="p-3">Status</th>
-        <th class="p-3">Completed At</th>
+        <th class="p-3 whitespace-nowrap">Matric No</th>
+        <th class="p-3 whitespace-nowrap">Status</th>
+        <th class="p-3 whitespace-nowrap">Completed At</th>
       </tr>
     </thead>
     <tbody id="votersTableBody"></tbody>
@@ -293,7 +293,7 @@ async function renderCandidates(){
     const image = c.image || avatarDataUri(c.name);
     list.innerHTML += `
       <div class="border p-4 rounded text-center">
-        <img src="${image}" class="w-24 h-24 mx-auto rounded-full object-cover">
+        <img src="${image}" class="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full object-cover">
         <h4 class="mt-2 font-semibold">${c.name}</h4>
         <p class="text-sm">${c.position}</p>
         <p class="text-sm text-gray-500">Votes: ${c.votes ?? 0}</p>
@@ -313,9 +313,9 @@ async function renderVoteRecords() {
     const votedFor = v.candidateName || v.candidateId || '';
     body.innerHTML += `
       <tr class="border-t">
-        <td class="p-3">${matric}</td>
-        <td class="p-3">${position}</td>
-        <td class="p-3">${votedFor}</td>
+        <td class="p-3 whitespace-nowrap">${matric}</td>
+        <td class="p-3 whitespace-nowrap">${position}</td>
+        <td class="p-3 whitespace-nowrap">${votedFor}</td>
       </tr>`;
   });
 }
@@ -341,9 +341,9 @@ async function renderRegisteredVoters() {
     const completedAt = formatTimestamp(v.completedAt);
     body.innerHTML += `
       <tr class="border-t">
-        <td class="p-3">${matric}</td>
-        <td class="p-3">${status}</td>
-        <td class="p-3">${completedAt}</td>
+        <td class="p-3 whitespace-nowrap">${matric}</td>
+        <td class="p-3 whitespace-nowrap">${status}</td>
+        <td class="p-3 whitespace-nowrap">${completedAt}</td>
       </tr>`;
   });
 }
