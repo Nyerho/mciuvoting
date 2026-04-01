@@ -150,6 +150,13 @@
       }
     }
 
+    function withTimeout(promise, timeoutMs) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+      ]);
+    }
+
     function normalizePosition(value) {
       return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
     }
@@ -324,7 +331,7 @@
 
     async function ensureElectionDoc() {
       try {
-        const snap = await electionRef.get();
+        const snap = await withTimeout(electionRef.get(), 4500);
         if (!snap.exists) {
           await electionRef.set({ status: 'closed', positions: defaultPositions }, { merge: true });
           cachedPositions = [...defaultPositions];
@@ -487,7 +494,7 @@
     async function renderCandidates() {
       candidateList.innerHTML = '';
       try {
-        const snap = await db.collection('candidates').get();
+        const snap = await withTimeout(db.collection('candidates').get(), 7000);
         const rows = [];
         snap.forEach(s => {
           const c = s.data() || {};
@@ -537,7 +544,7 @@
     async function renderVoteRecords() {
       votesTableBody.innerHTML = '';
       try {
-        const snap = await db.collection('votes').orderBy('createdAt', 'desc').limit(200).get();
+        const snap = await withTimeout(db.collection('votes').orderBy('createdAt', 'desc').limit(200).get(), 7000);
         snap.forEach(s => {
           const v = s.data() || {};
           const matric = v.matric || '';
@@ -563,7 +570,7 @@
     async function renderRegisteredVoters() {
       votersTableBody.innerHTML = '';
       try {
-        const snap = await db.collection('voters').orderBy('createdAt', 'desc').limit(200).get();
+        const snap = await withTimeout(db.collection('voters').orderBy('createdAt', 'desc').limit(200).get(), 7000);
         snap.forEach(s => {
           const v = s.data() || {};
           const matric = v.matric || s.id || '';
@@ -587,13 +594,20 @@
     }
 
     async function refreshAll() {
-      await enableOfflinePersistence();
       renderPositionOptions();
-      await ensureElectionDoc();
-      renderPositionOptions();
-      await renderCandidates();
-      await renderVoteRecords();
-      await renderRegisteredVoters();
+      try {
+        await withTimeout(enableOfflinePersistence(), 1200);
+      } catch {}
+
+      ensureElectionDoc()
+        .then(() => renderPositionOptions())
+        .catch(() => {});
+
+      Promise.allSettled([
+        renderCandidates(),
+        renderVoteRecords(),
+        renderRegisteredVoters()
+      ]).catch(() => {});
     }
 
     openBtn.onclick = () => setElectionStatus('active');
