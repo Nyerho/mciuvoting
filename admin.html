@@ -32,14 +32,20 @@ tailwind.config = {
 
 <hr class="my-6">
 
+<h2 class="text-xl font-semibold mb-4">Add Position</h2>
+
+<div class="flex flex-col md:flex-row gap-4 mb-6">
+  <input id="newPositionName" class="border p-2 rounded flex-1" placeholder="e.g. Treasurer">
+  <button id="addPositionBtn" class="bg-primary text-white px-6 py-2 rounded">Add Position</button>
+</div>
+
+<hr class="my-6">
+
 <h2 class="text-xl font-semibold mb-4">Add Candidate</h2>
 
 <div class="grid md:grid-cols-3 gap-4 mb-6">
   <input id="candName" class="border p-2 rounded" placeholder="Candidate name">
   <select id="candPosition" class="border p-2 rounded">
-    <option>President</option>
-    <option>Vice President</option>
-    <option>Secretary General</option>
   </select>
   <input id="candImage" type="file" accept="image/*" class="border p-2 rounded">
 </div>
@@ -64,6 +70,7 @@ if (!currentUser || currentUser.role !== 'admin') {
 }
 
 /* ========= INIT ========= */
+const defaultPositions = ['President', 'Vice President', 'Secretary General'];
 if (!localStorage.getItem('electionData')) {
   localStorage.setItem('electionData', JSON.stringify({
     status: 'closed',
@@ -73,6 +80,25 @@ if (!localStorage.getItem('electionData')) {
       'Secretary General': []
     }
   }));
+} else {
+  const existing = JSON.parse(localStorage.getItem('electionData'));
+  if (!existing || typeof existing !== 'object') {
+    localStorage.setItem('electionData', JSON.stringify({
+      status: 'closed',
+      positions: {
+        President: [],
+        'Vice President': [],
+        'Secretary General': []
+      }
+    }));
+  } else {
+    if (existing.status !== 'active' && existing.status !== 'closed') existing.status = 'closed';
+    if (!existing.positions || typeof existing.positions !== 'object') existing.positions = {};
+    for (const p of defaultPositions) {
+      if (!Object.prototype.hasOwnProperty.call(existing.positions, p)) existing.positions[p] = [];
+    }
+    localStorage.setItem('electionData', JSON.stringify(existing));
+  }
 }
 
 const data = () => JSON.parse(localStorage.getItem('electionData'));
@@ -88,8 +114,8 @@ function renderStatus() {
 renderStatus();
 
 /* ========= BUTTONS ========= */
-openBtn.onclick = () => { const d = data(); d.status='active'; save(d); renderStatus(); };
-closeBtn.onclick = () => { const d = data(); d.status='closed'; save(d); renderStatus(); };
+openBtn.onclick = () => { const d = data(); d.status='active'; save(d); localStorage.setItem('electionStatus', 'active'); renderStatus(); };
+closeBtn.onclick = () => { const d = data(); d.status='closed'; save(d); localStorage.setItem('electionStatus', 'closed'); renderStatus(); };
 
 resetBtn.onclick = () => {
   if (!confirm('Reset election?')) return;
@@ -131,16 +157,48 @@ function avatarDataUri(name) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function getPositionKeys() {
+  const d = data();
+  if (!d.positions || typeof d.positions !== 'object') return [];
+  return Object.keys(d.positions);
+}
+
+function renderPositionOptions() {
+  const select = document.getElementById('candPosition');
+  const keys = getPositionKeys();
+  select.innerHTML = keys.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+addPositionBtn.onclick = () => {
+  const name = newPositionName.value.trim().replace(/\s+/g, ' ');
+  if (!name) return alert('Enter position name');
+
+  const d = data();
+  if (!d.positions || typeof d.positions !== 'object') d.positions = {};
+
+  const exists = Object.keys(d.positions).some(p => p.toLowerCase() === name.toLowerCase());
+  if (exists) return alert('Position already exists');
+
+  d.positions[name] = [];
+  save(d);
+  newPositionName.value = '';
+  renderPositionOptions();
+};
+
 /* ========= ADD ========= */
 window.addCandidate = () => {
   const name = candName.value.trim();
   const file = candImage.files?.[0];
+  const position = candPosition.value;
 
   if (!name) return alert('Enter candidate name');
+  if (!position) return alert('Select position');
 
   const addWithImage = (img) => {
     const d = data();
-    d.positions[candPosition.value].push({
+    if (!d.positions || typeof d.positions !== 'object') d.positions = {};
+    if (!d.positions[position]) d.positions[position] = [];
+    d.positions[position].push({
       id: Date.now(),
       name,
       image: img || avatarDataUri(name),
@@ -189,6 +247,7 @@ function renderCandidates(){
   }
 }
 renderCandidates();
+renderPositionOptions();
 </script>
 
 </body>

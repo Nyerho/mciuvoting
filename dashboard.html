@@ -57,31 +57,7 @@ tailwind.config = {
 
   <div class="bg-white rounded-2xl shadow p-8">
     <h3 class="text-xl font-semibold mb-6">Available Positions</h3>
-    <div class="space-y-4 fade-in">
-      <div class="flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card" data-position="President">
-        <div>
-          <h4 class="font-medium">President</h4>
-          <p class="text-sm text-gray-500">Lead the Student Union Government</p>
-        </div>
-        <a href="candidates.html?position=President" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
-      </div>
-
-      <div class="flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card" data-position="Vice President">
-        <div>
-          <h4 class="font-medium">Vice President</h4>
-          <p class="text-sm text-gray-500">Assist and support the President</p>
-        </div>
-        <a href="candidates.html?position=Vice%20President" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
-      </div>
-
-      <div class="flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card" data-position="Secretary General">
-        <div>
-          <h4 class="font-medium">Secretary General</h4>
-          <p class="text-sm text-gray-500">Manage records and communications</p>
-        </div>
-        <a href="candidates.html?position=Secretary%20General" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
-      </div>
-    </div>
+    <div id="positionsList" class="space-y-4 fade-in"></div>
     <p class="mt-8 text-sm text-gray-500">⚠ Once you vote for a position, it cannot be changed.</p>
   </div>
 
@@ -99,10 +75,29 @@ const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
   matric: 'TEMP001'
 };
 
-/* ===== ELECTION STATUS ===== */
-const electionStatus = localStorage.getItem('electionStatus') || 'active';
-const votingStatus = document.getElementById('votingStatus');
+const defaultPositions = ['President', 'Vice President', 'Secretary General'];
 
+function getElectionData() {
+  let d = null;
+  const raw = localStorage.getItem('electionData');
+  if (raw) {
+    try { d = JSON.parse(raw); } catch {}
+  }
+  if (!d || typeof d !== 'object') d = { status: 'closed', positions: {} };
+  if (d.status !== 'active' && d.status !== 'closed') d.status = 'closed';
+  if (!d.positions || typeof d.positions !== 'object') d.positions = {};
+  for (const p of defaultPositions) {
+    if (!Object.prototype.hasOwnProperty.call(d.positions, p)) d.positions[p] = [];
+  }
+  localStorage.setItem('electionData', JSON.stringify(d));
+  localStorage.setItem('electionStatus', d.status);
+  return d;
+}
+
+const electionData = getElectionData();
+const electionStatus = electionData.status;
+
+const votingStatus = document.getElementById('votingStatus');
 if (electionStatus === 'active') {
   votingStatus.innerText = 'Voting Active';
   votingStatus.classList.add('text-green-600');
@@ -116,18 +111,49 @@ if (electionStatus === 'active') {
 const votes = JSON.parse(localStorage.getItem('votes')) || {};
 const progress = document.getElementById('progressStatus');
 
+const positionsList = document.getElementById('positionsList');
+positionsList.innerHTML = '';
+
+const positions = Object.keys(electionData.positions || {});
+for (const position of positions) {
+  const card = document.createElement('div');
+  card.className = 'flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card';
+  card.dataset.position = position;
+
+  const href = `candidates.html?position=${encodeURIComponent(position)}`;
+
+  card.innerHTML = `
+    <div>
+      <h4 class="font-medium">${position}</h4>
+      <p class="text-sm text-gray-500">Select a candidate to vote</p>
+    </div>
+    <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
+  `;
+
+  positionsList.appendChild(card);
+}
+
+const userVotes = (currentUser && votes[currentUser.matric]) ? votes[currentUser.matric] : {};
+const votedCount = userVotes ? Object.keys(userVotes).length : 0;
+const totalPositions = positions.length;
+
+if (totalPositions === 0) {
+  progress.innerText = 'No Positions';
+} else if (votedCount === 0) {
+  progress.innerText = 'Not Voted';
+} else if (votedCount >= totalPositions) {
+  progress.innerText = 'All Positions Voted';
+} else {
+  progress.innerText = 'Partially Voted';
+}
+
 document.querySelectorAll('.position-card').forEach(card => {
   const position = card.dataset.position;
   const btn = card.querySelector('.vote-btn');
 
-  if (
-    currentUser &&
-    votes[currentUser.matric] &&
-    votes[currentUser.matric][position]
-  ) {
+  if (userVotes && userVotes[position]) {
     btn.innerText = 'Voted';
     btn.classList.add('opacity-50', 'pointer-events-none');
-    progress.innerText = 'Partially Voted';
   }
 
   if (electionStatus !== 'active') {
@@ -135,14 +161,6 @@ document.querySelectorAll('.position-card').forEach(card => {
     btn.classList.add('opacity-50', 'pointer-events-none');
   }
 });
-
-/* ===== ALL POSITIONS VOTED CHECK ===== */
-if (
-  votes[currentUser.matric] &&
-  Object.keys(votes[currentUser.matric]).length === 3
-) {
-  progress.innerText = 'All Positions Voted';
-}
 </script>
 
 

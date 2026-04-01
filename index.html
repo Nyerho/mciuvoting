@@ -113,8 +113,19 @@ tailwind.config = {
 <script>
   // Make sure DOM is ready
   document.addEventListener('DOMContentLoaded', () => {
-    // Read the actual election status from localStorage
-    const electionStatus = localStorage.getItem('electionStatus') || 'closed';
+    const raw = localStorage.getItem('electionData');
+    let electionStatus = 'closed';
+    if (raw) {
+      try {
+        const d = JSON.parse(raw);
+        if (d && (d.status === 'active' || d.status === 'closed')) {
+          electionStatus = d.status;
+        }
+      } catch {}
+    } else {
+      const legacy = localStorage.getItem('electionStatus');
+      if (legacy === 'active' || legacy === 'closed') electionStatus = legacy;
+    }
     const statusEl = document.getElementById('statusText');
     const statusBtn = document.getElementById('statusBtn');
     const proceedBtn = document.getElementById('proceedBtn');
