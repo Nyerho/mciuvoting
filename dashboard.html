@@ -261,16 +261,18 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
 }
 
 (async () => {
-  const voterSnap = await db.collection('voters').doc(String(currentUser.matric || '').toUpperCase()).get();
-  if (voterSnap.exists) {
-    const voter = voterSnap.data() || {};
-    if (voter.completedAt) {
-      localStorage.removeItem('currentUser');
-      alert('This matric number has already completed voting and cannot login again.');
-      window.location.href = 'login.html';
-      return;
+  try {
+    const voterSnap = await db.collection('voters').doc(String(currentUser.matric || '').toUpperCase()).get();
+    if (voterSnap.exists) {
+      const voter = voterSnap.data() || {};
+      if (voter.completedAt) {
+        localStorage.removeItem('currentUser');
+        alert('This matric number has already completed voting and cannot login again.');
+        window.location.href = 'login.html';
+        return;
+      }
     }
-  }
+  } catch {}
 
   const election = await loadElection();
   renderStatus(election.status);

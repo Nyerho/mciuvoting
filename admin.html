@@ -202,12 +202,16 @@ function renderPositionOptions() {
   const current = select.value;
   const positions = Array.isArray(cachedPositions) && cachedPositions.length ? cachedPositions : defaultPositions;
   const unique = Array.from(new Set(positions.map(p => String(p || '').trim()).filter(Boolean)));
-  const optionsHtml = [
-    `<option value="" disabled ${current ? '' : 'selected'}>Select position</option>`,
-    ...unique.map(p => `<option value="${p}">${p}</option>`)
-  ].join('');
+  const hasCurrent = current && unique.includes(current);
+  const optionsHtml = unique.length
+    ? unique.map(p => `<option value="${p}">${p}</option>`).join('')
+    : `<option value="" disabled selected>No positions available</option>`;
   select.innerHTML = optionsHtml;
-  if (current && unique.includes(current)) select.value = current;
+  if (hasCurrent) {
+    select.value = current;
+  } else if (unique.length) {
+    select.value = unique[0];
+  }
 }
 
 async function ensureElectionDoc() {
@@ -294,19 +298,19 @@ addPositionBtn.onclick = () => {
 };
 
 window.addCandidate = () => {
+  setAddCandidateLoading(true);
   const name = candName.value.trim();
   const file = candImage.files?.[0];
   const position = candPosition.value;
   const positionKey = normalizePosition(position);
   const nameKey = normalizeCandidateName(name);
 
-  if (!name) return alert('Enter candidate name');
-  if (!position) return alert('Select position');
-  if (!positionKey) return alert('Select position');
-  if (!nameKey) return alert('Enter candidate name');
+  if (!name) { alert('Enter candidate name'); setAddCandidateLoading(false); return; }
+  if (!position) { alert('Select position'); setAddCandidateLoading(false); return; }
+  if (!positionKey) { alert('Select position'); setAddCandidateLoading(false); return; }
+  if (!nameKey) { alert('Enter candidate name'); setAddCandidateLoading(false); return; }
 
   const addWithImage = async (img) => {
-    setAddCandidateLoading(true);
     try {
       const existing = await db.collection('candidates').where('positionKey', '==', positionKey).get();
       let isDuplicate = false;
