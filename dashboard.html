@@ -69,7 +69,23 @@ tailwind.config = {
   </div>
 </footer>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
+  authDomain: "mciuvoting.firebaseapp.com",
+  projectId: "mciuvoting",
+  storageBucket: "mciuvoting.firebasestorage.app",
+  messagingSenderId: "545959480192",
+  appId: "1:545959480192:web:f8444c81d7ab46459a8f65",
+  measurementId: "G-P0FT8RQLN3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 /* ===== CURRENT USER ===== */
 const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
   matric: 'TEMP001'
@@ -77,89 +93,103 @@ const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
 
 const defaultPositions = ['President', 'Vice President', 'Secretary General'];
 
-function getElectionData() {
-  let d = null;
-  const raw = localStorage.getItem('electionData');
-  if (raw) {
-    try { d = JSON.parse(raw); } catch {}
-  }
-  if (!d || typeof d !== 'object') d = { status: 'closed', positions: {} };
-  if (d.status !== 'active' && d.status !== 'closed') d.status = 'closed';
-  if (!d.positions || typeof d.positions !== 'object') d.positions = {};
-  for (const p of defaultPositions) {
-    if (!Object.prototype.hasOwnProperty.call(d.positions, p)) d.positions[p] = [];
-  }
-  localStorage.setItem('electionData', JSON.stringify(d));
-  localStorage.setItem('electionStatus', d.status);
-  return d;
-}
-
-const electionData = getElectionData();
-const electionStatus = electionData.status;
-
 const votingStatus = document.getElementById('votingStatus');
-if (electionStatus === 'active') {
-  votingStatus.innerText = 'Voting Active';
-  votingStatus.classList.add('text-green-600');
-} else {
-  votingStatus.innerText = 'Voting Closed';
-  votingStatus.classList.remove('text-green-600');
-  votingStatus.classList.add('text-red-600');
-}
-
-/* ===== VOTES STORAGE ===== */
-const votes = JSON.parse(localStorage.getItem('votes')) || {};
 const progress = document.getElementById('progressStatus');
-
 const positionsList = document.getElementById('positionsList');
-positionsList.innerHTML = '';
 
-const positions = Object.keys(electionData.positions || {});
-for (const position of positions) {
-  const card = document.createElement('div');
-  card.className = 'flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card';
-  card.dataset.position = position;
-
-  const href = `candidates.html?position=${encodeURIComponent(position)}`;
-
-  card.innerHTML = `
-    <div>
-      <h4 class="font-medium">${position}</h4>
-      <p class="text-sm text-gray-500">Select a candidate to vote</p>
-    </div>
-    <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
-  `;
-
-  positionsList.appendChild(card);
+if (!currentUser || !currentUser.matric || currentUser.role !== 'student') {
+  window.location.href = 'login.html';
 }
 
-const userVotes = (currentUser && votes[currentUser.matric]) ? votes[currentUser.matric] : {};
-const votedCount = userVotes ? Object.keys(userVotes).length : 0;
-const totalPositions = positions.length;
-
-if (totalPositions === 0) {
-  progress.innerText = 'No Positions';
-} else if (votedCount === 0) {
-  progress.innerText = 'Not Voted';
-} else if (votedCount >= totalPositions) {
-  progress.innerText = 'All Positions Voted';
-} else {
-  progress.innerText = 'Partially Voted';
+async function loadElection() {
+  const electionRef = doc(db, 'election', 'current');
+  const snap = await getDoc(electionRef);
+  if (!snap.exists()) return { status: 'closed', positions: defaultPositions };
+  const d = snap.data() || {};
+  const status = d.status === 'active' ? 'active' : 'closed';
+  const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
+  return { status, positions };
 }
 
-document.querySelectorAll('.position-card').forEach(card => {
-  const position = card.dataset.position;
-  const btn = card.querySelector('.vote-btn');
+async function loadUserVotes(matric) {
+  const q = query(collection(db, 'votes'), where('matric', '==', matric));
+  const snap = await getDocs(q);
+  const map = {};
+  snap.forEach(docSnap => {
+    const v = docSnap.data();
+    if (v && v.position) map[v.position] = v.candidateId || true;
+  });
+  return map;
+}
 
-  if (userVotes && userVotes[position]) {
-    btn.innerText = 'Voted';
-    btn.classList.add('opacity-50', 'pointer-events-none');
+function renderStatus(status) {
+  if (status === 'active') {
+    votingStatus.innerText = 'Voting Active';
+    votingStatus.classList.add('text-green-600');
+    votingStatus.classList.remove('text-red-600');
+  } else {
+    votingStatus.innerText = 'Voting Closed';
+    votingStatus.classList.remove('text-green-600');
+    votingStatus.classList.add('text-red-600');
+  }
+}
+
+function renderPositions(positions, electionStatus, userVotes) {
+  positionsList.innerHTML = '';
+
+  for (const position of positions) {
+    const card = document.createElement('div');
+    card.className = 'flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card';
+    card.dataset.position = position;
+
+    const href = `candidates.html?position=${encodeURIComponent(position)}`;
+    card.innerHTML = `
+      <div>
+        <h4 class="font-medium">${position}</h4>
+        <p class="text-sm text-gray-500">Select a candidate to vote</p>
+      </div>
+      <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
+    `;
+
+    positionsList.appendChild(card);
   }
 
-  if (electionStatus !== 'active') {
-    btn.innerText = 'Closed';
-    btn.classList.add('opacity-50', 'pointer-events-none');
+  const votedCount = Object.keys(userVotes || {}).length;
+  const totalPositions = positions.length;
+
+  if (totalPositions === 0) {
+    progress.innerText = 'No Positions';
+  } else if (votedCount === 0) {
+    progress.innerText = 'Not Voted';
+  } else if (votedCount >= totalPositions) {
+    progress.innerText = 'All Positions Voted';
+  } else {
+    progress.innerText = 'Partially Voted';
   }
+
+  document.querySelectorAll('.position-card').forEach(card => {
+    const position = card.dataset.position;
+    const btn = card.querySelector('.vote-btn');
+
+    if (userVotes && userVotes[position]) {
+      btn.innerText = 'Voted';
+      btn.classList.add('opacity-50', 'pointer-events-none');
+    }
+
+    if (electionStatus !== 'active') {
+      btn.innerText = 'Closed';
+      btn.classList.add('opacity-50', 'pointer-events-none');
+    }
+  });
+}
+
+(async () => {
+  const election = await loadElection();
+  renderStatus(election.status);
+  const userVotes = await loadUserVotes(currentUser.matric);
+  renderPositions(election.positions, election.status, userVotes);
+})().catch(() => {
+  alert('Network error. Please refresh.');
 });
 </script>
 

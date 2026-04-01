@@ -50,10 +50,29 @@
 </div>
 
 <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
+  authDomain: "mciuvoting.firebaseapp.com",
+  projectId: "mciuvoting",
+  storageBucket: "mciuvoting.firebasestorage.app",
+  messagingSenderId: "545959480192",
+  appId: "1:545959480192:web:f8444c81d7ab46459a8f65",
+  measurementId: "G-P0FT8RQLN3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 /* ================== BASIC SETUP ================== */
 
 const params = new URLSearchParams(window.location.search);
 const position = params.get('position');
+if (!position) {
+  window.location.href = 'dashboard.html';
+}
 
 function getInitials(name) {
   const parts = String(name || '')
@@ -79,53 +98,83 @@ function avatarDataUri(name) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
-  matric: 'TEMP001'
-};
-
-const electionData = JSON.parse(localStorage.getItem('electionData'));
-
-if (!electionData || electionData.status !== 'active') {
-  alert('Election is not active');
-  window.location.href = 'dashboard.html';
+const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {};
+if (!currentUser || !currentUser.matric) {
+  window.location.href = 'login.html';
 }
 
 /* ================== LOAD CANDIDATES ================== */
-
-const candidates = electionData.positions[position];
-
-if (!candidates) {
-  alert('Invalid position');
-  window.location.href = 'dashboard.html';
-}
 
 document.getElementById('pageTitle').innerText = `Vote for ${position}`;
 
 const grid = document.getElementById('candidatesGrid');
 let selectedCandidateId = null;
+let selectedCandidateName = null;
+let candidates = [];
 
-candidates.forEach(candidate => {
-  const card = document.createElement('div');
-  card.className = 'bg-white rounded-xl shadow p-6 text-center';
-  const image = candidate.image || avatarDataUri(candidate.name);
+async function loadElectionAndCandidates() {
+  const electionRef = doc(db, 'election', 'current');
+  const electionSnap = await getDoc(electionRef);
+  const election = electionSnap.exists() ? electionSnap.data() : null;
 
-  card.innerHTML = `
-    <img src="${image}" class="w-32 h-32 mx-auto rounded-full object-cover">
-    <h3 class="mt-4 font-semibold">${candidate.name}</h3>
-    <button class="mt-6 w-full bg-primary text-white py-2 rounded">
-      Vote
-    </button>
-  `;
+  if (!election || election.status !== 'active') {
+    alert('Election is not active');
+    window.location.href = 'dashboard.html';
+    return;
+  }
 
-  card.querySelector('button').onclick = () => confirmVote(candidate.id);
+  const positions = Array.isArray(election.positions) ? election.positions : [];
+  const validPosition = positions.some(p => String(p).toLowerCase() === String(position).toLowerCase());
+  if (!validPosition) {
+    alert('Invalid position');
+    window.location.href = 'dashboard.html';
+    return;
+  }
 
-  grid.appendChild(card);
+  const q = query(collection(db, 'candidates'), where('position', '==', position));
+  const snap = await getDocs(q);
+  const list = [];
+  snap.forEach(d => {
+    const c = d.data();
+    list.push({
+      id: d.id,
+      name: c?.name || '',
+      position: c?.position || position,
+      image: c?.image || null,
+      votes: c?.votes ?? 0
+    });
+  });
+  list.sort((a, b) => a.name.localeCompare(b.name));
+  candidates = list;
+
+  grid.innerHTML = '';
+  candidates.forEach(candidate => {
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-xl shadow p-6 text-center';
+    const image = candidate.image || avatarDataUri(candidate.name);
+
+    card.innerHTML = `
+      <img src="${image}" class="w-32 h-32 mx-auto rounded-full object-cover">
+      <h3 class="mt-4 font-semibold">${candidate.name}</h3>
+      <button class="mt-6 w-full bg-primary text-white py-2 rounded">
+        Vote
+      </button>
+    `;
+
+    card.querySelector('button').onclick = () => confirmVote(candidate.id);
+    grid.appendChild(card);
+  });
+}
+
+loadElectionAndCandidates().catch(() => {
+  alert('Network error. Please refresh.');
 });
 
 /* ================== VOTING ================== */
 
 function confirmVote(id) {
   selectedCandidateId = id;
+  selectedCandidateName = candidates.find(c => c.id === id)?.name || '';
   document.getElementById('confirmText').innerText =
     `You are about to vote for this candidate as ${position}`;
   document.getElementById('voteModal').classList.remove('hidden');
@@ -138,27 +187,46 @@ window.closeModal = function () {
 };
 
 window.submitVote = function () {
+  if (!selectedCandidateId) return;
 
-  const votes = JSON.parse(localStorage.getItem('votes')) || {};
-
-  if (votes[currentUser.matric]?.[position]) {
-    alert('You already voted for this position');
+  const matric = String(currentUser?.matric || '').trim().toUpperCase();
+  if (!matric) {
+    alert('Enter your matric number');
+    window.location.href = 'login.html';
     return;
   }
 
-  // save voter record
-  if (!votes[currentUser.matric]) votes[currentUser.matric] = {};
-  votes[currentUser.matric][position] = selectedCandidateId;
+  (async () => {
+    const voteId = `${matric}_${position}`;
+    const voteRef = doc(db, 'votes', voteId);
+    const candidateRef = doc(db, 'candidates', selectedCandidateId);
 
-  localStorage.setItem('votes', JSON.stringify(votes));
+    await runTransaction(db, async (tx) => {
+      const existingVote = await tx.get(voteRef);
+      if (existingVote.exists()) throw new Error('ALREADY_VOTED');
 
-  // increment candidate vote
-  const candidate = candidates.find(c => c.id === selectedCandidateId);
-  candidate.votes = (candidate.votes ?? 0) + 1;
+      const candidateSnap = await tx.get(candidateRef);
+      if (!candidateSnap.exists()) throw new Error('CANDIDATE_MISSING');
 
-  localStorage.setItem('electionData', JSON.stringify(electionData));
+      const currentVotes = candidateSnap.data()?.votes ?? 0;
+      tx.update(candidateRef, { votes: currentVotes + 1 });
+      tx.set(voteRef, {
+        matric,
+        position,
+        candidateId: selectedCandidateId,
+        candidateName: selectedCandidateName,
+        createdAt: serverTimestamp()
+      });
+    });
 
-  window.location.href = 'dashboard.html';
+    window.location.href = 'dashboard.html';
+  })().catch((err) => {
+    if (String(err?.message || '') === 'ALREADY_VOTED') {
+      alert('You already voted for this position');
+      return;
+    }
+    alert('Could not submit vote. Please try again.');
+  });
 };
 </script>
 

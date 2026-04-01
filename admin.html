@@ -59,74 +59,52 @@ tailwind.config = {
 <h2 class="text-xl font-semibold mb-4">Candidates</h2>
 <div id="candidateList" class="grid md:grid-cols-3 gap-6"></div>
 
+<hr class="my-6">
+
+<h2 class="text-xl font-semibold mb-4">Vote Records</h2>
+<div class="overflow-auto border rounded">
+  <table class="w-full text-sm">
+    <thead class="bg-secondary text-left">
+      <tr>
+        <th class="p-3">Matric No</th>
+        <th class="p-3">Position</th>
+        <th class="p-3">Voted For</th>
+      </tr>
+    </thead>
+    <tbody id="votesTableBody"></tbody>
+  </table>
+</div>
+
 </div>
 
 <script type="module">
-/* ========= ACCESS ========= */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, deleteDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
+  authDomain: "mciuvoting.firebaseapp.com",
+  projectId: "mciuvoting",
+  storageBucket: "mciuvoting.firebasestorage.app",
+  messagingSenderId: "545959480192",
+  appId: "1:545959480192:web:f8444c81d7ab46459a8f65",
+  measurementId: "G-P0FT8RQLN3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 const currentUser = JSON.parse(localStorage.getItem('currentUser'));
 if (!currentUser || currentUser.role !== 'admin') {
   alert('Admins only');
   window.location.href = 'login.html';
 }
 
-/* ========= INIT ========= */
 const defaultPositions = ['President', 'Vice President', 'Secretary General'];
-if (!localStorage.getItem('electionData')) {
-  localStorage.setItem('electionData', JSON.stringify({
-    status: 'closed',
-    positions: {
-      President: [],
-      'Vice President': [],
-      'Secretary General': []
-    }
-  }));
-} else {
-  const existing = JSON.parse(localStorage.getItem('electionData'));
-  if (!existing || typeof existing !== 'object') {
-    localStorage.setItem('electionData', JSON.stringify({
-      status: 'closed',
-      positions: {
-        President: [],
-        'Vice President': [],
-        'Secretary General': []
-      }
-    }));
-  } else {
-    if (existing.status !== 'active' && existing.status !== 'closed') existing.status = 'closed';
-    if (!existing.positions || typeof existing.positions !== 'object') existing.positions = {};
-    for (const p of defaultPositions) {
-      if (!Object.prototype.hasOwnProperty.call(existing.positions, p)) existing.positions[p] = [];
-    }
-    localStorage.setItem('electionData', JSON.stringify(existing));
-  }
-}
-
-const data = () => JSON.parse(localStorage.getItem('electionData'));
-const save = d => localStorage.setItem('electionData', JSON.stringify(d));
-
+const electionRef = doc(db, 'election', 'current');
 const statusText = document.getElementById('statusText');
+let cachedPositions = defaultPositions;
 
-/* ========= STATUS ========= */
-function renderStatus() {
-  statusText.innerText = data().status === 'active' ? 'ACTIVE' : 'CLOSED';
-  statusText.className = data().status === 'active' ? 'text-green-600' : 'text-red-600';
-}
-renderStatus();
-
-/* ========= BUTTONS ========= */
-openBtn.onclick = () => { const d = data(); d.status='active'; save(d); localStorage.setItem('electionStatus', 'active'); renderStatus(); };
-closeBtn.onclick = () => { const d = data(); d.status='closed'; save(d); localStorage.setItem('electionStatus', 'closed'); renderStatus(); };
-
-resetBtn.onclick = () => {
-  if (!confirm('Reset election?')) return;
-  const d = data();
-  for (const pos in d.positions) d.positions[pos] = [];
-  save(d);
-  localStorage.removeItem('votes');
-  renderCandidates();
-};
-
-/* ========= IMAGE ========= */
 function toBase64(file, cb){
   const r = new FileReader();
   r.onload = () => cb(r.result);
@@ -157,35 +135,79 @@ function avatarDataUri(name) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-function getPositionKeys() {
-  const d = data();
-  if (!d.positions || typeof d.positions !== 'object') return [];
-  return Object.keys(d.positions);
+function renderStatus(status) {
+  statusText.innerText = status === 'active' ? 'ACTIVE' : 'CLOSED';
+  statusText.className = status === 'active' ? 'text-green-600' : 'text-red-600';
 }
 
 function renderPositionOptions() {
   const select = document.getElementById('candPosition');
-  const keys = getPositionKeys();
-  select.innerHTML = keys.map(p => `<option value="${p}">${p}</option>`).join('');
+  select.innerHTML = cachedPositions.map(p => `<option value="${p}">${p}</option>`).join('');
 }
+
+async function ensureElectionDoc() {
+  const snap = await getDoc(electionRef);
+  if (!snap.exists()) {
+    await setDoc(electionRef, { status: 'closed', positions: defaultPositions });
+    cachedPositions = defaultPositions;
+    renderStatus('closed');
+    localStorage.setItem('electionStatus', 'closed');
+    return;
+  }
+  const d = snap.data() || {};
+  const status = d.status === 'active' ? 'active' : 'closed';
+  const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
+  cachedPositions = positions;
+  renderStatus(status);
+  localStorage.setItem('electionStatus', status);
+}
+
+openBtn.onclick = async () => {
+  await updateDoc(electionRef, { status: 'active' });
+  renderStatus('active');
+  localStorage.setItem('electionStatus', 'active');
+};
+
+closeBtn.onclick = async () => {
+  await updateDoc(electionRef, { status: 'closed' });
+  renderStatus('closed');
+  localStorage.setItem('electionStatus', 'closed');
+};
+
+resetBtn.onclick = () => {
+  if (!confirm('Reset election?')) return;
+  (async () => {
+    const candidatesSnap = await getDocs(collection(db, 'candidates'));
+    const deletes = [];
+    candidatesSnap.forEach(s => deletes.push(deleteDoc(doc(db, 'candidates', s.id))));
+    await Promise.allSettled(deletes);
+
+    const votesSnap = await getDocs(collection(db, 'votes'));
+    const voteDeletes = [];
+    votesSnap.forEach(s => voteDeletes.push(deleteDoc(doc(db, 'votes', s.id))));
+    await Promise.allSettled(voteDeletes);
+
+    await renderCandidates();
+    await renderVoteRecords();
+  })().catch(() => alert('Could not reset election'));
+};
 
 addPositionBtn.onclick = () => {
   const name = newPositionName.value.trim().replace(/\s+/g, ' ');
   if (!name) return alert('Enter position name');
 
-  const d = data();
-  if (!d.positions || typeof d.positions !== 'object') d.positions = {};
-
-  const exists = Object.keys(d.positions).some(p => p.toLowerCase() === name.toLowerCase());
+  const exists = cachedPositions.some(p => p.toLowerCase() === name.toLowerCase());
   if (exists) return alert('Position already exists');
 
-  d.positions[name] = [];
-  save(d);
-  newPositionName.value = '';
-  renderPositionOptions();
+  (async () => {
+    const updated = [...cachedPositions, name];
+    await updateDoc(electionRef, { positions: updated });
+    cachedPositions = updated;
+    newPositionName.value = '';
+    renderPositionOptions();
+  })().catch(() => alert('Could not add position'));
 };
 
-/* ========= ADD ========= */
 window.addCandidate = () => {
   const name = candName.value.trim();
   const file = candImage.files?.[0];
@@ -195,19 +217,17 @@ window.addCandidate = () => {
   if (!position) return alert('Select position');
 
   const addWithImage = (img) => {
-    const d = data();
-    if (!d.positions || typeof d.positions !== 'object') d.positions = {};
-    if (!d.positions[position]) d.positions[position] = [];
-    d.positions[position].push({
-      id: Date.now(),
-      name,
-      image: img || avatarDataUri(name),
-      votes: 0
-    });
-    save(d);
-    candName.value = '';
-    candImage.value = '';
-    renderCandidates();
+    (async () => {
+      await addDoc(collection(db, 'candidates'), {
+        name,
+        position,
+        image: img || avatarDataUri(name),
+        votes: 0
+      });
+      candName.value = '';
+      candImage.value = '';
+      await renderCandidates();
+    })().catch(() => alert('Could not add candidate'));
   };
 
   if (file) {
@@ -218,36 +238,69 @@ window.addCandidate = () => {
   addWithImage(null);
 };
 
-/* ========= DELETE ========= */
-window.deleteCandidate = (pos, id) => {
-  const d = data();
-  d.positions[pos] = d.positions[pos].filter(c => c.id !== id);
-  save(d);
-  renderCandidates();
+window.deleteCandidate = (candidateDocId) => {
+  (async () => {
+    await deleteDoc(doc(db, 'candidates', candidateDocId));
+    await renderCandidates();
+  })().catch(() => alert('Could not delete candidate'));
 };
 
-/* ========= RENDER ========= */
-function renderCandidates(){
+async function renderCandidates(){
   const list = document.getElementById('candidateList');
   list.innerHTML = '';
-  const d = data();
-  for (const pos in d.positions) {
-    d.positions[pos].forEach(c => {
-      const image = c.image || avatarDataUri(c.name);
-      list.innerHTML += `
-        <div class="border p-4 rounded text-center">
-          <img src="${image}" class="w-24 h-24 mx-auto rounded-full object-cover">
-          <h4 class="mt-2 font-semibold">${c.name}</h4>
-          <p class="text-sm">${pos}</p>
-          <p class="text-sm text-gray-500">Votes: ${c.votes ?? 0}</p>
-          <button onclick="deleteCandidate('${pos}', ${c.id})"
-            class="text-red-600 text-sm mt-2">Delete</button>
-        </div>`;
+
+  const snap = await getDocs(collection(db, 'candidates'));
+  const rows = [];
+  snap.forEach(s => {
+    const c = s.data() || {};
+    rows.push({
+      id: s.id,
+      name: c.name || '',
+      position: c.position || '',
+      image: c.image || null,
+      votes: c.votes ?? 0
     });
-  }
+  });
+  rows.sort((a, b) => (a.position + a.name).localeCompare(b.position + b.name));
+
+  rows.forEach(c => {
+    const image = c.image || avatarDataUri(c.name);
+    list.innerHTML += `
+      <div class="border p-4 rounded text-center">
+        <img src="${image}" class="w-24 h-24 mx-auto rounded-full object-cover">
+        <h4 class="mt-2 font-semibold">${c.name}</h4>
+        <p class="text-sm">${c.position}</p>
+        <p class="text-sm text-gray-500">Votes: ${c.votes ?? 0}</p>
+        <button onclick="deleteCandidate('${c.id}')" class="text-red-600 text-sm mt-2">Delete</button>
+      </div>`;
+  });
 }
-renderCandidates();
-renderPositionOptions();
+
+async function renderVoteRecords() {
+  const body = document.getElementById('votesTableBody');
+  body.innerHTML = '';
+  const q = query(collection(db, 'votes'), orderBy('createdAt', 'desc'), limit(200));
+  const snap = await getDocs(q);
+  snap.forEach(s => {
+    const v = s.data() || {};
+    const matric = v.matric || '';
+    const position = v.position || '';
+    const votedFor = v.candidateName || v.candidateId || '';
+    body.innerHTML += `
+      <tr class="border-t">
+        <td class="p-3">${matric}</td>
+        <td class="p-3">${position}</td>
+        <td class="p-3">${votedFor}</td>
+      </tr>`;
+  });
+}
+
+(async () => {
+  await ensureElectionDoc();
+  renderPositionOptions();
+  await renderCandidates();
+  await renderVoteRecords();
+})().catch(() => alert('Network error. Please refresh.'));
 </script>
 
 </body>
