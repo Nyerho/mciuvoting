@@ -98,6 +98,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
@@ -110,16 +111,14 @@
     };
 
     firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
     const db = firebase.firestore();
     try {
       db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
     } catch {}
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    if (!currentUser || currentUser.role !== 'admin') {
-      alert('Admins only');
-      window.location.href = 'login.html';
-    }
+    const logoutLink = document.querySelector('a[href="index.html"]');
 
     const defaultPositions = ['President', 'Vice President', 'Secretary General'];
     const electionRef = db.collection('election').doc('current');
@@ -140,15 +139,6 @@
     const votersTableBody = document.getElementById('votersTableBody');
 
     let cachedPositions = [...defaultPositions];
-
-    async function enableOfflinePersistence() {
-      try {
-        await db.enablePersistence();
-        return true;
-      } catch {
-        return false;
-      }
-    }
 
     function withTimeout(promise, timeoutMs) {
       return Promise.race([
@@ -176,6 +166,17 @@
         return 'Unknown error';
       } catch {
         return 'Unknown error';
+      }
+    }
+
+    async function requireAdmin() {
+      const user = auth.currentUser;
+      if (!user) return false;
+      try {
+        const snap = await withTimeout(db.collection('admins').doc(user.uid).get(), 4500);
+        return snap.exists;
+      } catch {
+        return false;
       }
     }
 
@@ -365,7 +366,7 @@
 
     async function setElectionStatus(status) {
       try {
-        await electionRef.set({ status }, { merge: true });
+        await withTimeout(electionRef.set({ status }, { merge: true }), 4500);
         localStorage.setItem('electionStatus', status);
         setStatus(status);
         showToast(`Election is now ${status.toUpperCase()}`);
@@ -448,12 +449,17 @@
         return;
       }
 
+      if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+        showToast('You are offline. Please connect to the internet and try again.', 'error');
+        return;
+      }
+
       setButtonLoading(addCandidateBtn, true, 'Adding...', 'Add Candidate');
       try {
         const docId = candidateDocId(positionKey, nameKey);
         const ref = db.collection('candidates').doc(docId);
         try {
-          const existing = await ref.get();
+          const existing = await withTimeout(ref.get(), 4500);
           if (existing.exists) {
             showToast(`Candidate "${name}" already exists for ${position}.`, 'error');
             return;
@@ -463,14 +469,14 @@
         let image = null;
         if (file) {
           setButtonLoading(addCandidateBtn, true, 'Optimizing image...', 'Add Candidate');
-          image = await compressImageToDataUri(file, 650000);
+          image = await withTimeout(compressImageToDataUri(file, 650000), 20000);
           if (!image) {
             showToast('Image too large after optimization. Choose a smaller image.', 'error');
             return;
           }
         }
 
-        await ref.set({
+        await withTimeout(ref.set({
           name,
           nameKey,
           position,
@@ -478,7 +484,7 @@
           image: image || avatarDataUri(name),
           votes: 0,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        }), 9000);
 
         candName.value = '';
         candImage.value = '';
@@ -526,7 +532,7 @@
           candidateList.appendChild(card);
         }
       } catch (e) {
-        candidateList.innerHTML = `<div class="text-sm text-red-700">Could not load candidates</div>`;
+        candidateList.innerHTML = `<div class="text-sm text-red-700">Could not load candidates: ${safeErrorMessage(e)}</div>`;
       }
     }
 
@@ -562,7 +568,7 @@
       } catch (e) {
         const tr = document.createElement('tr');
         tr.className = 'border-t';
-        tr.innerHTML = `<td class="p-3 text-red-700" colspan="3">Could not load votes</td>`;
+        tr.innerHTML = `<td class="p-3 text-red-700" colspan="3">Could not load votes: ${safeErrorMessage(e)}</td>`;
         votesTableBody.appendChild(tr);
       }
     }
@@ -588,7 +594,7 @@
       } catch (e) {
         const tr = document.createElement('tr');
         tr.className = 'border-t';
-        tr.innerHTML = `<td class="p-3 text-red-700" colspan="3">Could not load voters</td>`;
+        tr.innerHTML = `<td class="p-3 text-red-700" colspan="3">Could not load voters: ${safeErrorMessage(e)}</td>`;
         votersTableBody.appendChild(tr);
       }
     }
@@ -596,7 +602,7 @@
     async function refreshAll() {
       renderPositionOptions();
       try {
-        await withTimeout(enableOfflinePersistence(), 1200);
+        await Promise.resolve();
       } catch {}
 
       ensureElectionDoc()
@@ -619,7 +625,34 @@
     window.addCandidate = addCandidate;
     window.deleteCandidate = deleteCandidate;
 
-    refreshAll().catch(e => showToast(`Init failed: ${safeErrorMessage(e)}`, 'error'));
+    if (logoutLink) {
+      logoutLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        try { auth.signOut(); } catch {}
+        try { localStorage.removeItem('currentUser'); } catch {}
+        window.location.href = 'login.html';
+      });
+    }
+
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        showToast('Admin sign-in required', 'error');
+        setTimeout(() => { window.location.href = 'login.html'; }, 600);
+        return;
+      }
+      const ok = await requireAdmin();
+      if (!ok) {
+        showToast('Not authorized as admin', 'error');
+        try { await auth.signOut(); } catch {}
+        try { localStorage.removeItem('currentUser'); } catch {}
+        setTimeout(() => { window.location.href = 'login.html'; }, 900);
+        return;
+      }
+      if (!currentUser || currentUser.role !== 'admin') {
+        localStorage.setItem('currentUser', JSON.stringify({ matric: 'ADMIN', role: 'admin', uid: user.uid }));
+      }
+      refreshAll().catch(e => showToast(`Init failed: ${safeErrorMessage(e)}`, 'error'));
+    });
   </script>
 </body>
 </html>
