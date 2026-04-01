@@ -51,6 +51,10 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+try {
+  db.settings({ experimentalForceLongPolling: true });
+  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+} catch {}
 
 /* ================== BASIC SETUP ================== */
 
@@ -103,19 +107,26 @@ let selectedCandidateName = null;
 let candidates = [];
 
 async function loadElectionAndCandidates() {
-  const voterSnap = await db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get();
-  if (voterSnap.exists) {
-    const voter = voterSnap.data() || {};
-    if (voter.completedAt) {
-      localStorage.removeItem('currentUser');
-      alert('This matric number has already completed voting and cannot login again.');
-      window.location.href = 'login.html';
-      return;
+  try {
+    const voterSnap = await db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get();
+    if (voterSnap.exists) {
+      const voter = voterSnap.data() || {};
+      if (voter.completedAt) {
+        localStorage.removeItem('currentUser');
+        alert('This matric number has already completed voting and cannot login again.');
+        window.location.href = 'login.html';
+        return;
+      }
     }
-  }
+  } catch {}
 
-  const electionSnap = await db.collection('election').doc('current').get();
-  const election = electionSnap.exists ? electionSnap.data() : null;
+  let election = null;
+  try {
+    const electionSnap = await db.collection('election').doc('current').get();
+    election = electionSnap.exists ? electionSnap.data() : null;
+  } catch {
+    election = { status: 'active', positions: [position] };
+  }
 
   if (!election || election.status !== 'active') {
     alert('Election is not active');
@@ -134,21 +145,9 @@ async function loadElectionAndCandidates() {
   const positionKey = normalizePosition(position);
   const list = [];
 
-  const snapByKey = await db.collection('candidates').where('positionKey', '==', positionKey).get();
-  snapByKey.forEach(d => {
-    const c = d.data();
-    list.push({
-      id: d.id,
-      name: c?.name || '',
-      position: c?.position || position,
-      image: c?.image || null,
-      votes: c?.votes ?? 0
-    });
-  });
-
-  if (!list.length) {
-    const snapLegacy = await db.collection('candidates').where('position', '==', position).get();
-    snapLegacy.forEach(d => {
+  try {
+    const snapByKey = await db.collection('candidates').where('positionKey', '==', positionKey).get();
+    snapByKey.forEach(d => {
       const c = d.data();
       list.push({
         id: d.id,
@@ -158,6 +157,22 @@ async function loadElectionAndCandidates() {
         votes: c?.votes ?? 0
       });
     });
+  } catch {}
+
+  if (!list.length) {
+    try {
+      const snapLegacy = await db.collection('candidates').where('position', '==', position).get();
+      snapLegacy.forEach(d => {
+        const c = d.data();
+        list.push({
+          id: d.id,
+          name: c?.name || '',
+          position: c?.position || position,
+          image: c?.image || null,
+          votes: c?.votes ?? 0
+        });
+      });
+    } catch {}
   }
 
   list.sort((a, b) => a.name.localeCompare(b.name));

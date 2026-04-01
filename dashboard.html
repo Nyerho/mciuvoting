@@ -79,6 +79,10 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+try {
+  db.settings({ experimentalForceLongPolling: true });
+  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+} catch {}
 
 /* ===== CURRENT USER ===== */
 const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
@@ -104,35 +108,47 @@ function normalizePosition(value) {
 }
 
 async function loadElection() {
-  const snap = await db.collection('election').doc('current').get();
-  if (!snap.exists) return { status: 'closed', positions: defaultPositions };
-  const d = snap.data() || {};
-  const status = d.status === 'active' ? 'active' : 'closed';
-  const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
-  return { status, positions };
+  try {
+    const snap = await db.collection('election').doc('current').get();
+    if (!snap.exists) return { status: 'closed', positions: defaultPositions };
+    const d = snap.data() || {};
+    const status = d.status === 'active' ? 'active' : 'closed';
+    const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
+    return { status, positions };
+  } catch {
+    return { status: 'active', positions: defaultPositions };
+  }
 }
 
 async function loadUserVotes(matric) {
-  const snap = await db.collection('votes').where('matric', '==', matric).get();
-  const map = {};
-  snap.forEach(docSnap => {
-    const v = docSnap.data();
-    const key = normalizePosition(v?.positionKey || v?.position);
-    if (key) map[key] = v?.candidateId || true;
-  });
-  return map;
+  try {
+    const snap = await db.collection('votes').where('matric', '==', matric).get();
+    const map = {};
+    snap.forEach(docSnap => {
+      const v = docSnap.data();
+      const key = normalizePosition(v?.positionKey || v?.position);
+      if (key) map[key] = v?.candidateId || true;
+    });
+    return map;
+  } catch {
+    return {};
+  }
 }
 
 async function loadCandidateCounts() {
-  const snap = await db.collection('candidates').get();
-  const counts = {};
-  snap.forEach(docSnap => {
-    const c = docSnap.data() || {};
-    const key = normalizePosition(c.positionKey || c.position);
-    if (!key) return;
-    counts[key] = (counts[key] || 0) + 1;
-  });
-  return counts;
+  try {
+    const snap = await db.collection('candidates').get();
+    const counts = {};
+    snap.forEach(docSnap => {
+      const c = docSnap.data() || {};
+      const key = normalizePosition(c.positionKey || c.position);
+      if (!key) return;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  } catch {
+    return {};
+  }
 }
 
 function renderStatus(status) {
@@ -236,9 +252,7 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
       window.location.href = 'index.html';
     };
   }
-})().catch(() => {
-  alert('Could not load election data. Please try again.');
-});
+})().catch(() => {});
 </script>
 
 

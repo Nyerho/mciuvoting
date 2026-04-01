@@ -75,6 +75,10 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+try {
+  db.settings({ experimentalForceLongPolling: true });
+  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+} catch {}
 
 const form = document.querySelector('form');
 const matricInput = document.getElementById('matric');
@@ -150,36 +154,45 @@ form.addEventListener('submit', e => {
   }
 
   (async () => {
-    const electionRef = db.collection('election').doc('current');
-    const snap = await electionRef.get();
-    if (!snap.exists) {
-      await electionRef.set({
-        status: 'active',
-        positions: ['President', 'Vice President', 'Secretary General']
-      });
+    let electionSnap = null;
+    try {
+      const electionRef = db.collection('election').doc('current');
+      electionSnap = await electionRef.get();
+      if (!electionSnap.exists) {
+        await electionRef.set({
+          status: 'active',
+          positions: ['President', 'Vice President', 'Secretary General']
+        });
+      }
+    } catch (e) {
+      // proceed even if offline
     }
-
-    const election = snap.data() || {};
 
     const voterRef = db.collection('voters').doc(normalizedMatric);
-    const voterSnap = await voterRef.get();
-    const voter = voterSnap.exists ? (voterSnap.data() || {}) : null;
-    if (voter && voter.completedAt) {
-      alert('This matric number has already completed voting and cannot login again.');
-      submitBtn.disabled = false;
-      submitBtn.classList.remove('opacity-50', 'pointer-events-none');
-      submitBtn.innerText = 'Login & Proceed';
-      return;
+    try {
+      const voterSnap = await voterRef.get();
+      const voter = voterSnap.exists ? (voterSnap.data() || {}) : null;
+      if (voter && voter.completedAt) {
+        alert('This matric number has already completed voting and cannot login again.');
+        resetSubmit();
+        return;
+      }
+    } catch (e) {
+      // offline: skip completed check
     }
 
-    const now = firebase.firestore.FieldValue.serverTimestamp();
-    await voterRef.set({
-      matric: normalizedMatric,
-      faculty: 'NS',
-      createdAt: now,
-      lastLoginAt: now,
-      completedAt: null
-    }, { merge: true });
+    try {
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      await voterRef.set({
+        matric: normalizedMatric,
+        faculty: 'NS',
+        createdAt: now,
+        lastLoginAt: now,
+        completedAt: null
+      }, { merge: true });
+    } catch (e) {
+      // offline: allow navigation; the write will sync later if persistence is enabled
+    }
 
     localStorage.setItem('currentUser', JSON.stringify({
       matric: normalizedMatric,
