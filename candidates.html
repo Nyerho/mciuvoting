@@ -386,7 +386,9 @@ window.submitVote = function () {
       alert('You already voted for this position');
       return;
     }
-    alert(err?.message || 'Could not submit vote. Please try again.');
+    const code = err && err.code ? String(err.code) : '';
+    const msg = err && err.message ? String(err.message) : '';
+    alert(code && msg ? `${code}: ${msg}` : (msg || 'Could not submit vote. Please try again.'));
   });
 };
 </script>

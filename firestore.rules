@@ -55,16 +55,29 @@ service cloud.firestore {
         request.resource.data.votes >= 0;
 
       allow update: if
-        isAdmin() &&
-        request.resource.data.keys().hasOnly(['name', 'nameKey', 'position', 'positionKey', 'image', 'votes', 'createdAt']) &&
-        isNonEmptyString(request.resource.data.name, 120) &&
-        isNameKey(request.resource.data.nameKey) &&
-        isNonEmptyString(request.resource.data.position, 120) &&
-        isPositionKey(request.resource.data.positionKey) &&
-        request.resource.data.image is string &&
-        request.resource.data.image.size() <= 900000 &&
-        request.resource.data.votes is number &&
-        request.resource.data.votes >= 0;
+        (
+          isAdmin() &&
+          request.resource.data.keys().hasOnly(['name', 'nameKey', 'position', 'positionKey', 'image', 'votes', 'createdAt']) &&
+          isNonEmptyString(request.resource.data.name, 120) &&
+          isNameKey(request.resource.data.nameKey) &&
+          isNonEmptyString(request.resource.data.position, 120) &&
+          isPositionKey(request.resource.data.positionKey) &&
+          request.resource.data.image is string &&
+          request.resource.data.image.size() <= 900000 &&
+          request.resource.data.votes is number &&
+          request.resource.data.votes >= 0
+        ) || (
+          request.resource.data.keys().hasOnly(['name', 'nameKey', 'position', 'positionKey', 'image', 'votes', 'createdAt']) &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['votes']) &&
+          request.resource.data.name == resource.data.name &&
+          request.resource.data.nameKey == resource.data.nameKey &&
+          request.resource.data.position == resource.data.position &&
+          request.resource.data.positionKey == resource.data.positionKey &&
+          request.resource.data.image == resource.data.image &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.votes is number &&
+          request.resource.data.votes == resource.data.votes + 1
+        );
 
       allow delete: if isAdmin();
     }
