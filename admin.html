@@ -39,10 +39,10 @@
 <h2 class="text-xl font-semibold mb-4">Add Candidate</h2>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-  <input id="candName" class="border p-2 rounded" placeholder="Candidate name">
-  <select id="candPosition" class="border p-2 rounded">
+  <input id="candName" class="border p-2 rounded w-full" placeholder="Candidate name">
+  <select id="candPosition" class="border p-2 rounded w-full">
   </select>
-  <input id="candImage" type="file" accept="image/*" class="border p-2 rounded">
+  <input id="candImage" type="file" accept="image/*" class="border p-2 rounded w-full">
 </div>
 
 <button onclick="addCandidate()" class="bg-primary text-white px-6 py-2 rounded">
@@ -159,24 +159,46 @@ function renderStatus(status) {
 
 function renderPositionOptions() {
   const select = document.getElementById('candPosition');
-  select.innerHTML = cachedPositions.map(p => `<option value="${p}">${p}</option>`).join('');
+  const current = select.value;
+  const positions = Array.isArray(cachedPositions) && cachedPositions.length ? cachedPositions : defaultPositions;
+  const unique = Array.from(new Set(positions.map(p => String(p || '').trim()).filter(Boolean)));
+  const optionsHtml = [
+    `<option value="" disabled ${current ? '' : 'selected'}>Select position</option>`,
+    ...unique.map(p => `<option value="${p}">${p}</option>`)
+  ].join('');
+  select.innerHTML = optionsHtml;
+  if (current && unique.includes(current)) select.value = current;
 }
 
 async function ensureElectionDoc() {
-  const snap = await electionRef.get();
-  if (!snap.exists) {
-    await electionRef.set({ status: 'closed', positions: defaultPositions });
-    cachedPositions = defaultPositions;
-    renderStatus('closed');
-    localStorage.setItem('electionStatus', 'closed');
-    return;
+  try {
+    const snap = await electionRef.get();
+    if (!snap.exists) {
+      await electionRef.set({ status: 'closed', positions: defaultPositions }, { merge: true });
+      cachedPositions = defaultPositions;
+      renderStatus('closed');
+      localStorage.setItem('electionStatus', 'closed');
+      localStorage.setItem('positions', JSON.stringify(defaultPositions));
+      return;
+    }
+    const d = snap.data() || {};
+    const status = d.status === 'active' ? 'active' : 'closed';
+    const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
+    cachedPositions = positions;
+    renderStatus(status);
+    localStorage.setItem('electionStatus', status);
+    localStorage.setItem('positions', JSON.stringify(positions));
+  } catch {
+    const legacyStatus = localStorage.getItem('electionStatus');
+    const status = legacyStatus === 'active' || legacyStatus === 'closed' ? legacyStatus : 'closed';
+    let positions = defaultPositions;
+    try {
+      const stored = JSON.parse(localStorage.getItem('positions') || 'null');
+      if (Array.isArray(stored) && stored.length) positions = stored;
+    } catch {}
+    cachedPositions = positions;
+    renderStatus(status);
   }
-  const d = snap.data() || {};
-  const status = d.status === 'active' ? 'active' : 'closed';
-  const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
-  cachedPositions = positions;
-  renderStatus(status);
-  localStorage.setItem('electionStatus', status);
 }
 
 openBtn.onclick = async () => {
