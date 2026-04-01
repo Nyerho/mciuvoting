@@ -36,10 +36,9 @@
   </div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
   authDomain: "mciuvoting.firebaseapp.com",
@@ -50,8 +49,8 @@ const firebaseConfig = {
   measurementId: "G-P0FT8RQLN3"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 /* ================== BASIC SETUP ================== */
 
@@ -104,9 +103,19 @@ let selectedCandidateName = null;
 let candidates = [];
 
 async function loadElectionAndCandidates() {
-  const electionRef = doc(db, 'election', 'current');
-  const electionSnap = await getDoc(electionRef);
-  const election = electionSnap.exists() ? electionSnap.data() : null;
+  const voterSnap = await db.collection('voters').doc(String(currentUser?.matric || '').toUpperCase()).get();
+  if (voterSnap.exists) {
+    const voter = voterSnap.data() || {};
+    if (voter.completedAt) {
+      localStorage.removeItem('currentUser');
+      alert('This matric number has already completed voting and cannot login again.');
+      window.location.href = 'login.html';
+      return;
+    }
+  }
+
+  const electionSnap = await db.collection('election').doc('current').get();
+  const election = electionSnap.exists ? electionSnap.data() : null;
 
   if (!election || election.status !== 'active') {
     alert('Election is not active');
@@ -125,8 +134,7 @@ async function loadElectionAndCandidates() {
   const positionKey = normalizePosition(position);
   const list = [];
 
-  const byKey = query(collection(db, 'candidates'), where('positionKey', '==', positionKey));
-  const snapByKey = await getDocs(byKey);
+  const snapByKey = await db.collection('candidates').where('positionKey', '==', positionKey).get();
   snapByKey.forEach(d => {
     const c = d.data();
     list.push({
@@ -139,8 +147,7 @@ async function loadElectionAndCandidates() {
   });
 
   if (!list.length) {
-    const legacy = query(collection(db, 'candidates'), where('position', '==', position));
-    const snapLegacy = await getDocs(legacy);
+    const snapLegacy = await db.collection('candidates').where('position', '==', position).get();
     snapLegacy.forEach(d => {
       const c = d.data();
       list.push({
@@ -186,7 +193,7 @@ async function loadElectionAndCandidates() {
 }
 
 loadElectionAndCandidates().catch(() => {
-  alert('Network error. Please refresh.');
+  alert('Could not load candidates. Please try again.');
 });
 
 /* ================== VOTING ================== */
@@ -223,21 +230,21 @@ window.submitVote = function () {
   (async () => {
     const positionKey = normalizePosition(position);
     const voteId = `${matric}_${positionKey}`;
-    const voteRef = doc(db, 'votes', voteId);
+    const voteRef = db.collection('votes').doc(voteId);
     const legacyVoteId = `${matric}_${position}`;
-    const legacyVoteRef = legacyVoteId === voteId ? null : doc(db, 'votes', legacyVoteId);
-    const candidateRef = doc(db, 'candidates', selectedCandidateId);
+    const legacyVoteRef = legacyVoteId === voteId ? null : db.collection('votes').doc(legacyVoteId);
+    const candidateRef = db.collection('candidates').doc(selectedCandidateId);
 
-    await runTransaction(db, async (tx) => {
+    await db.runTransaction(async (tx) => {
       const existingVote = await tx.get(voteRef);
-      if (existingVote.exists()) throw new Error('ALREADY_VOTED');
+      if (existingVote.exists) throw new Error('ALREADY_VOTED');
       if (legacyVoteRef) {
         const legacyExisting = await tx.get(legacyVoteRef);
-        if (legacyExisting.exists()) throw new Error('ALREADY_VOTED');
+        if (legacyExisting.exists) throw new Error('ALREADY_VOTED');
       }
 
       const candidateSnap = await tx.get(candidateRef);
-      if (!candidateSnap.exists()) throw new Error('CANDIDATE_MISSING');
+      if (!candidateSnap.exists) throw new Error('CANDIDATE_MISSING');
 
       const currentVotes = candidateSnap.data()?.votes ?? 0;
       tx.update(candidateRef, { votes: currentVotes + 1 });
@@ -247,7 +254,7 @@ window.submitVote = function () {
         positionKey,
         candidateId: selectedCandidateId,
         candidateName: selectedCandidateName,
-        createdAt: serverTimestamp()
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
 
@@ -257,7 +264,7 @@ window.submitVote = function () {
       alert('You already voted for this position');
       return;
     }
-    alert('Could not submit vote. Please try again.');
+    alert(err?.message || 'Could not submit vote. Please try again.');
   });
 };
 </script>

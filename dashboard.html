@@ -52,6 +52,7 @@
   <div class="bg-white rounded-2xl shadow p-8">
     <h3 class="text-xl font-semibold mb-6">Available Positions</h3>
     <div id="positionsList" class="space-y-4 fade-in"></div>
+    <button id="doneVotingBtn" class="hidden mt-6 w-full bg-green-600 text-white py-3 rounded-lg text-lg hover:bg-green-700 transition">Done Voting</button>
     <p class="mt-8 text-sm text-gray-500">⚠ Once you vote for a position, it cannot be changed.</p>
   </div>
 
@@ -63,10 +64,9 @@
   </div>
 </footer>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
   authDomain: "mciuvoting.firebaseapp.com",
@@ -77,8 +77,8 @@ const firebaseConfig = {
   measurementId: "G-P0FT8RQLN3"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 /* ===== CURRENT USER ===== */
 const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {
@@ -90,6 +90,7 @@ const defaultPositions = ['President', 'Vice President', 'Secretary General'];
 const votingStatus = document.getElementById('votingStatus');
 const progress = document.getElementById('progressStatus');
 const positionsList = document.getElementById('positionsList');
+const doneVotingBtn = document.getElementById('doneVotingBtn');
 
 if (!currentUser || !currentUser.matric || currentUser.role !== 'student') {
   window.location.href = 'login.html';
@@ -103,9 +104,8 @@ function normalizePosition(value) {
 }
 
 async function loadElection() {
-  const electionRef = doc(db, 'election', 'current');
-  const snap = await getDoc(electionRef);
-  if (!snap.exists()) return { status: 'closed', positions: defaultPositions };
+  const snap = await db.collection('election').doc('current').get();
+  if (!snap.exists) return { status: 'closed', positions: defaultPositions };
   const d = snap.data() || {};
   const status = d.status === 'active' ? 'active' : 'closed';
   const positions = Array.isArray(d.positions) && d.positions.length ? d.positions : defaultPositions;
@@ -113,8 +113,7 @@ async function loadElection() {
 }
 
 async function loadUserVotes(matric) {
-  const q = query(collection(db, 'votes'), where('matric', '==', matric));
-  const snap = await getDocs(q);
+  const snap = await db.collection('votes').where('matric', '==', matric).get();
   const map = {};
   snap.forEach(docSnap => {
     const v = docSnap.data();
@@ -125,7 +124,7 @@ async function loadUserVotes(matric) {
 }
 
 async function loadCandidateCounts() {
-  const snap = await getDocs(collection(db, 'candidates'));
+  const snap = await db.collection('candidates').get();
   const counts = {};
   snap.forEach(docSnap => {
     const c = docSnap.data() || {};
@@ -207,13 +206,38 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
 }
 
 (async () => {
+  const voterSnap = await db.collection('voters').doc(String(currentUser.matric || '').toUpperCase()).get();
+  if (voterSnap.exists) {
+    const voter = voterSnap.data() || {};
+    if (voter.completedAt) {
+      localStorage.removeItem('currentUser');
+      alert('This matric number has already completed voting and cannot login again.');
+      window.location.href = 'login.html';
+      return;
+    }
+  }
+
   const election = await loadElection();
   renderStatus(election.status);
   const userVotes = await loadUserVotes(currentUser.matric);
   const candidateCounts = await loadCandidateCounts();
   renderPositions(election.positions, election.status, userVotes, candidateCounts);
+
+  const votedCount = Object.keys(userVotes || {}).length;
+  const totalPositions = election.positions.length;
+  if (totalPositions > 0 && votedCount >= totalPositions) {
+    doneVotingBtn.classList.remove('hidden');
+    doneVotingBtn.onclick = async () => {
+      doneVotingBtn.classList.add('opacity-50', 'pointer-events-none');
+      await db.collection('voters').doc(String(currentUser.matric || '').toUpperCase()).set({
+        completedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      localStorage.removeItem('currentUser');
+      window.location.href = 'index.html';
+    };
+  }
 })().catch(() => {
-  alert('Network error. Please refresh.');
+  alert('Could not load election data. Please try again.');
 });
 </script>
 

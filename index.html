@@ -97,10 +97,9 @@
   </div>
 </footer>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
   authDomain: "mciuvoting.firebaseapp.com",
@@ -111,8 +110,8 @@ const firebaseConfig = {
   measurementId: "G-P0FT8RQLN3"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 function applyStatus(electionStatus) {
   const statusEl = document.getElementById('statusText');
@@ -135,8 +134,8 @@ function applyStatus(electionStatus) {
 async function loadStatus() {
   let electionStatus = 'closed';
   try {
-    const snap = await getDoc(doc(db, 'election', 'current'));
-    const d = snap.exists() ? snap.data() : null;
+    const snap = await db.collection('election').doc('current').get();
+    const d = snap.exists ? snap.data() : null;
     if (d && (d.status === 'active' || d.status === 'closed')) {
       electionStatus = d.status;
       localStorage.setItem('electionStatus', electionStatus);

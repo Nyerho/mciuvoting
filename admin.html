@@ -70,12 +70,27 @@
   </table>
 </div>
 
+<hr class="my-6">
+
+<h2 class="text-xl font-semibold mb-4">Registered Voters</h2>
+<div class="overflow-auto border rounded">
+  <table class="w-full text-sm">
+    <thead class="bg-secondary text-left">
+      <tr>
+        <th class="p-3">Matric No</th>
+        <th class="p-3">Status</th>
+        <th class="p-3">Completed At</th>
+      </tr>
+    </thead>
+    <tbody id="votersTableBody"></tbody>
+  </table>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, deleteDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+</div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyDRcir81tJ3zPxys8MFL_3MNSHtLJJKWIo",
   authDomain: "mciuvoting.firebaseapp.com",
@@ -86,8 +101,8 @@ const firebaseConfig = {
   measurementId: "G-P0FT8RQLN3"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 const currentUser = JSON.parse(localStorage.getItem('currentUser'));
 if (!currentUser || currentUser.role !== 'admin') {
@@ -96,7 +111,7 @@ if (!currentUser || currentUser.role !== 'admin') {
 }
 
 const defaultPositions = ['President', 'Vice President', 'Secretary General'];
-const electionRef = doc(db, 'election', 'current');
+const electionRef = db.collection('election').doc('current');
 const statusText = document.getElementById('statusText');
 let cachedPositions = defaultPositions;
 
@@ -145,9 +160,9 @@ function renderPositionOptions() {
 }
 
 async function ensureElectionDoc() {
-  const snap = await getDoc(electionRef);
-  if (!snap.exists()) {
-    await setDoc(electionRef, { status: 'closed', positions: defaultPositions });
+  const snap = await electionRef.get();
+  if (!snap.exists) {
+    await electionRef.set({ status: 'closed', positions: defaultPositions });
     cachedPositions = defaultPositions;
     renderStatus('closed');
     localStorage.setItem('electionStatus', 'closed');
@@ -162,13 +177,13 @@ async function ensureElectionDoc() {
 }
 
 openBtn.onclick = async () => {
-  await updateDoc(electionRef, { status: 'active' });
+  await electionRef.update({ status: 'active' });
   renderStatus('active');
   localStorage.setItem('electionStatus', 'active');
 };
 
 closeBtn.onclick = async () => {
-  await updateDoc(electionRef, { status: 'closed' });
+  await electionRef.update({ status: 'closed' });
   renderStatus('closed');
   localStorage.setItem('electionStatus', 'closed');
 };
@@ -176,18 +191,24 @@ closeBtn.onclick = async () => {
 resetBtn.onclick = () => {
   if (!confirm('Reset election?')) return;
   (async () => {
-    const candidatesSnap = await getDocs(collection(db, 'candidates'));
+    const candidatesSnap = await db.collection('candidates').get();
     const deletes = [];
-    candidatesSnap.forEach(s => deletes.push(deleteDoc(doc(db, 'candidates', s.id))));
+    candidatesSnap.forEach(s => deletes.push(db.collection('candidates').doc(s.id).delete()));
     await Promise.allSettled(deletes);
 
-    const votesSnap = await getDocs(collection(db, 'votes'));
+    const votesSnap = await db.collection('votes').get();
     const voteDeletes = [];
-    votesSnap.forEach(s => voteDeletes.push(deleteDoc(doc(db, 'votes', s.id))));
+    votesSnap.forEach(s => voteDeletes.push(db.collection('votes').doc(s.id).delete()));
     await Promise.allSettled(voteDeletes);
+
+    const votersSnap = await db.collection('voters').get();
+    const voterDeletes = [];
+    votersSnap.forEach(s => voterDeletes.push(db.collection('voters').doc(s.id).delete()));
+    await Promise.allSettled(voterDeletes);
 
     await renderCandidates();
     await renderVoteRecords();
+    await renderRegisteredVoters();
   })().catch(() => alert('Could not reset election'));
 };
 
@@ -200,7 +221,7 @@ addPositionBtn.onclick = () => {
 
   (async () => {
     const updated = [...cachedPositions, name];
-    await updateDoc(electionRef, { positions: updated });
+    await electionRef.update({ positions: updated });
     cachedPositions = updated;
     newPositionName.value = '';
     renderPositionOptions();
@@ -219,7 +240,7 @@ window.addCandidate = () => {
 
   const addWithImage = (img) => {
     (async () => {
-      await addDoc(collection(db, 'candidates'), {
+      await db.collection('candidates').add({
         name,
         position,
         positionKey,
@@ -242,7 +263,7 @@ window.addCandidate = () => {
 
 window.deleteCandidate = (candidateDocId) => {
   (async () => {
-    await deleteDoc(doc(db, 'candidates', candidateDocId));
+    await db.collection('candidates').doc(candidateDocId).delete();
     await renderCandidates();
   })().catch(() => alert('Could not delete candidate'));
 };
@@ -251,7 +272,7 @@ async function renderCandidates(){
   const list = document.getElementById('candidateList');
   list.innerHTML = '';
 
-  const snap = await getDocs(collection(db, 'candidates'));
+  const snap = await db.collection('candidates').get();
   const rows = [];
   snap.forEach(s => {
     const c = s.data() || {};
@@ -281,8 +302,7 @@ async function renderCandidates(){
 async function renderVoteRecords() {
   const body = document.getElementById('votesTableBody');
   body.innerHTML = '';
-  const q = query(collection(db, 'votes'), orderBy('createdAt', 'desc'), limit(200));
-  const snap = await getDocs(q);
+  const snap = await db.collection('votes').orderBy('createdAt', 'desc').limit(200).get();
   snap.forEach(s => {
     const v = s.data() || {};
     const matric = v.matric || '';
@@ -297,11 +317,40 @@ async function renderVoteRecords() {
   });
 }
 
+function formatTimestamp(ts) {
+  try {
+    if (!ts) return '';
+    if (typeof ts.toDate === 'function') return ts.toDate().toLocaleString();
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+async function renderRegisteredVoters() {
+  const body = document.getElementById('votersTableBody');
+  body.innerHTML = '';
+  const snap = await db.collection('voters').orderBy('createdAt', 'desc').limit(200).get();
+  snap.forEach(s => {
+    const v = s.data() || {};
+    const matric = v.matric || s.id || '';
+    const status = v.completedAt ? 'COMPLETED' : 'ACTIVE';
+    const completedAt = formatTimestamp(v.completedAt);
+    body.innerHTML += `
+      <tr class="border-t">
+        <td class="p-3">${matric}</td>
+        <td class="p-3">${status}</td>
+        <td class="p-3">${completedAt}</td>
+      </tr>`;
+  });
+}
+
 (async () => {
   await ensureElectionDoc();
   renderPositionOptions();
   await renderCandidates();
   await renderVoteRecords();
+  await renderRegisteredVoters();
 })().catch(() => alert('Network error. Please refresh.'));
 </script>
 
