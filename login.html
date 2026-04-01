@@ -161,35 +161,16 @@ form.addEventListener('submit', e => {
     return;
   }
 
-  (async () => {
-    let electionSnap = null;
+  // Fast path: set session and navigate immediately
+  localStorage.setItem('currentUser', JSON.stringify({
+    matric: normalizedMatric,
+    role: 'student'
+  }));
+  navigate('dashboard.html');
+  // Best-effort registration, non-blocking
+  setTimeout(async () => {
     try {
-      const electionRef = db.collection('election').doc('current');
-      electionSnap = await electionRef.get();
-      if (!electionSnap.exists) {
-        await electionRef.set({
-          status: 'active',
-          positions: ['President', 'Vice President', 'Secretary General']
-        });
-      }
-    } catch (e) {
-      // proceed even if offline
-    }
-
-    const voterRef = db.collection('voters').doc(normalizedMatric);
-    try {
-      const voterSnap = await voterRef.get();
-      const voter = voterSnap.exists ? (voterSnap.data() || {}) : null;
-      if (voter && voter.completedAt) {
-        alert('This matric number has already completed voting and cannot login again.');
-        resetSubmit();
-        return;
-      }
-    } catch (e) {
-      // offline: skip completed check
-    }
-
-    try {
+      const voterRef = db.collection('voters').doc(normalizedMatric);
       const now = firebase.firestore.FieldValue.serverTimestamp();
       await voterRef.set({
         matric: normalizedMatric,
@@ -198,19 +179,8 @@ form.addEventListener('submit', e => {
         lastLoginAt: now,
         completedAt: null
       }, { merge: true });
-    } catch (e) {
-      // offline: allow navigation; the write will sync later if persistence is enabled
-    }
-
-    localStorage.setItem('currentUser', JSON.stringify({
-      matric: normalizedMatric,
-      role: 'student'
-    }));
-    navigate('dashboard.html');
-  })().catch((err) => {
-    alert(err?.message || 'Could not login. Please try again.');
-    resetSubmit();
-  });
+    } catch {}
+  }, 200);
 });
 </script>
 
