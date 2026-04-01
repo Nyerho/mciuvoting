@@ -202,13 +202,11 @@ function renderPositionOptions() {
   const unique = Array.from(new Set(positions.map(p => String(p || '').trim()).filter(Boolean)));
   const hasCurrent = current && unique.includes(current);
   const optionsHtml = unique.length
-    ? unique.map(p => `<option value="${p}">${p}</option>`).join('')
+    ? [`<option value="" disabled ${hasCurrent ? '' : 'selected'}>Select position</option>`, ...unique.map(p => `<option value="${p}">${p}</option>`)].join('')
     : `<option value="" disabled selected>No positions available</option>`;
   select.innerHTML = optionsHtml;
   if (hasCurrent) {
     select.value = current;
-  } else if (unique.length) {
-    select.value = unique[0];
   }
 }
 
@@ -441,6 +439,7 @@ async function renderRegisteredVoters() {
 }
 
 (async () => {
+  renderPositionOptions();
   await ensureElectionDoc();
   renderPositionOptions();
   await renderCandidates();
