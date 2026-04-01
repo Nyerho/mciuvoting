@@ -340,7 +340,8 @@ window.addCandidate = () => {
       candName.value = '';
       candImage.value = '';
       showToast(`Candidate added: ${name}`);
-      await renderCandidates();
+      setAddCandidateLoading(false);
+      try { renderCandidates(); } catch {}
     } catch (e) {
       showToast('Could not add candidate. Please try again.', 'error');
     } finally {
