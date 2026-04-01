@@ -98,6 +98,10 @@ function avatarDataUri(name) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function normalizePosition(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {};
 if (!currentUser || !currentUser.matric) {
   window.location.href = 'login.html';
@@ -131,10 +135,12 @@ async function loadElectionAndCandidates() {
     return;
   }
 
-  const q = query(collection(db, 'candidates'), where('position', '==', position));
-  const snap = await getDocs(q);
+  const positionKey = normalizePosition(position);
   const list = [];
-  snap.forEach(d => {
+
+  const byKey = query(collection(db, 'candidates'), where('positionKey', '==', positionKey));
+  const snapByKey = await getDocs(byKey);
+  snapByKey.forEach(d => {
     const c = d.data();
     list.push({
       id: d.id,
@@ -144,10 +150,36 @@ async function loadElectionAndCandidates() {
       votes: c?.votes ?? 0
     });
   });
+
+  if (!list.length) {
+    const legacy = query(collection(db, 'candidates'), where('position', '==', position));
+    const snapLegacy = await getDocs(legacy);
+    snapLegacy.forEach(d => {
+      const c = d.data();
+      list.push({
+        id: d.id,
+        name: c?.name || '',
+        position: c?.position || position,
+        image: c?.image || null,
+        votes: c?.votes ?? 0
+      });
+    });
+  }
+
   list.sort((a, b) => a.name.localeCompare(b.name));
   candidates = list;
 
   grid.innerHTML = '';
+  if (!candidates.length) {
+    grid.innerHTML = `
+      <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
+        <h3 class="font-semibold text-lg">No nominated candidates yet</h3>
+        <p class="text-gray-600 mt-1">The admin has not added nominees for ${position}.</p>
+        <a href="dashboard.html" class="inline-block mt-4 text-primary">Back to positions</a>
+      </div>
+    `;
+    return;
+  }
   candidates.forEach(candidate => {
     const card = document.createElement('div');
     card.className = 'bg-white rounded-xl shadow p-6 text-center';
@@ -202,13 +234,20 @@ window.submitVote = function () {
   }
 
   (async () => {
-    const voteId = `${matric}_${position}`;
+    const positionKey = normalizePosition(position);
+    const voteId = `${matric}_${positionKey}`;
     const voteRef = doc(db, 'votes', voteId);
+    const legacyVoteId = `${matric}_${position}`;
+    const legacyVoteRef = legacyVoteId === voteId ? null : doc(db, 'votes', legacyVoteId);
     const candidateRef = doc(db, 'candidates', selectedCandidateId);
 
     await runTransaction(db, async (tx) => {
       const existingVote = await tx.get(voteRef);
       if (existingVote.exists()) throw new Error('ALREADY_VOTED');
+      if (legacyVoteRef) {
+        const legacyExisting = await tx.get(legacyVoteRef);
+        if (legacyExisting.exists()) throw new Error('ALREADY_VOTED');
+      }
 
       const candidateSnap = await tx.get(candidateRef);
       if (!candidateSnap.exists()) throw new Error('CANDIDATE_MISSING');
@@ -218,6 +257,7 @@ window.submitVote = function () {
       tx.set(voteRef, {
         matric,
         position,
+        positionKey,
         candidateId: selectedCandidateId,
         candidateName: selectedCandidateName,
         createdAt: serverTimestamp()

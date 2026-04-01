@@ -104,6 +104,10 @@ if (String(currentUser.matric || '').toUpperCase().startsWith('NS') === false) {
   window.location.href = 'login.html';
 }
 
+function normalizePosition(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 async function loadElection() {
   const electionRef = doc(db, 'election', 'current');
   const snap = await getDoc(electionRef);
@@ -120,9 +124,22 @@ async function loadUserVotes(matric) {
   const map = {};
   snap.forEach(docSnap => {
     const v = docSnap.data();
-    if (v && v.position) map[v.position] = v.candidateId || true;
+    const key = normalizePosition(v?.positionKey || v?.position);
+    if (key) map[key] = v?.candidateId || true;
   });
   return map;
+}
+
+async function loadCandidateCounts() {
+  const snap = await getDocs(collection(db, 'candidates'));
+  const counts = {};
+  snap.forEach(docSnap => {
+    const c = docSnap.data() || {};
+    const key = normalizePosition(c.positionKey || c.position);
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
 }
 
 function renderStatus(status) {
@@ -137,19 +154,22 @@ function renderStatus(status) {
   }
 }
 
-function renderPositions(positions, electionStatus, userVotes) {
+function renderPositions(positions, electionStatus, userVotes, candidateCounts) {
   positionsList.innerHTML = '';
 
   for (const position of positions) {
+    const positionKey = normalizePosition(position);
+    const count = candidateCounts?.[positionKey] || 0;
     const card = document.createElement('div');
     card.className = 'flex items-center justify-between border rounded-lg p-4 hover:bg-secondary transition position-card';
     card.dataset.position = position;
+    card.dataset.positionKey = positionKey;
 
     const href = `candidates.html?position=${encodeURIComponent(position)}`;
     card.innerHTML = `
       <div>
         <h4 class="font-medium">${position}</h4>
-        <p class="text-sm text-gray-500">Select a candidate to vote</p>
+        <p class="text-sm text-gray-500">${count ? `${count} nominated candidate${count === 1 ? '' : 's'}` : 'No nominated candidates yet'}</p>
       </div>
       <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition">Vote</a>
     `;
@@ -171,16 +191,22 @@ function renderPositions(positions, electionStatus, userVotes) {
   }
 
   document.querySelectorAll('.position-card').forEach(card => {
-    const position = card.dataset.position;
+    const positionKey = card.dataset.positionKey;
     const btn = card.querySelector('.vote-btn');
+    const count = candidateCounts?.[positionKey] || 0;
 
-    if (userVotes && userVotes[position]) {
+    if (userVotes && userVotes[positionKey]) {
       btn.innerText = 'Voted';
       btn.classList.add('opacity-50', 'pointer-events-none');
     }
 
     if (electionStatus !== 'active') {
       btn.innerText = 'Closed';
+      btn.classList.add('opacity-50', 'pointer-events-none');
+    }
+
+    if (count === 0) {
+      btn.innerText = 'Unavailable';
       btn.classList.add('opacity-50', 'pointer-events-none');
     }
   });
@@ -190,7 +216,8 @@ function renderPositions(positions, electionStatus, userVotes) {
   const election = await loadElection();
   renderStatus(election.status);
   const userVotes = await loadUserVotes(currentUser.matric);
-  renderPositions(election.positions, election.status, userVotes);
+  const candidateCounts = await loadCandidateCounts();
+  renderPositions(election.positions, election.status, userVotes, candidateCounts);
 })().catch(() => {
   alert('Network error. Please refresh.');
 });

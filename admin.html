@@ -105,6 +105,10 @@ const electionRef = doc(db, 'election', 'current');
 const statusText = document.getElementById('statusText');
 let cachedPositions = defaultPositions;
 
+function normalizePosition(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 function toBase64(file, cb){
   const r = new FileReader();
   r.onload = () => cb(r.result);
@@ -212,15 +216,18 @@ window.addCandidate = () => {
   const name = candName.value.trim();
   const file = candImage.files?.[0];
   const position = candPosition.value;
+  const positionKey = normalizePosition(position);
 
   if (!name) return alert('Enter candidate name');
   if (!position) return alert('Select position');
+  if (!positionKey) return alert('Select position');
 
   const addWithImage = (img) => {
     (async () => {
       await addDoc(collection(db, 'candidates'), {
         name,
         position,
+        positionKey,
         image: img || avatarDataUri(name),
         votes: 0
       });
