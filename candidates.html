@@ -132,6 +132,15 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
+async function getSnapWithTimeout(promise, timeoutMs) {
+  try {
+    const snap = await withTimeout(promise, timeoutMs);
+    return { snap, error: null };
+  } catch (e) {
+    return { snap: null, error: e };
+  }
+}
+
 // Render skeleton cards immediately to avoid perceived delay
 (function renderSkeleton() {
   grid.innerHTML = '';
@@ -156,24 +165,42 @@ async function loadElectionAndCandidates() {
     throw new Error('OFFLINE');
   }
 
-  const voterP = withTimeout(
-    db.collection('voters').doc(safeDocId(String(currentUser?.matric || '').toUpperCase())).get(),
-    6000
-  ).catch(() => null);
-  const electionP = withTimeout(
-    db.collection('election').doc('current').get(),
-    6000
-  ).catch(() => null);
-  const byKeyP = withTimeout(
-    db.collection('candidates').where('positionKey', '==', positionKey).get(),
-    8000
-  ).catch(() => null);
-  const legacyP = withTimeout(
-    db.collection('candidates').where('position', '==', position).get(),
-    8000
-  ).catch(() => null);
+  let voterSnap = null;
+  let electionSnap = null;
+  let byKeySnap = null;
+  let legacySnap = null;
+  let candidatesErr = null;
 
-  const [voterSnap, electionSnap, byKeySnap, legacySnap] = await Promise.all([voterP, electionP, byKeyP, legacyP]);
+  {
+    const [voterRes, electionRes, byKeyRes, legacyRes] = await Promise.all([
+      getSnapWithTimeout(db.collection('voters').doc(safeDocId(String(currentUser?.matric || '').toUpperCase())).get(), 12000),
+      getSnapWithTimeout(db.collection('election').doc('current').get(), 12000),
+      getSnapWithTimeout(db.collection('candidates').where('positionKey', '==', positionKey).get(), 20000),
+      getSnapWithTimeout(db.collection('candidates').where('position', '==', position).get(), 20000)
+    ]);
+
+    voterSnap = voterRes.snap;
+    electionSnap = electionRes.snap;
+    byKeySnap = byKeyRes.snap;
+    legacySnap = legacyRes.snap;
+    candidatesErr = byKeyRes.error || legacyRes.error || null;
+
+    if (!byKeySnap && !legacySnap && String(byKeyRes.error?.message || '') === 'timeout' && String(legacyRes.error?.message || '') === 'timeout') {
+      grid.innerHTML = `
+        <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
+          <h3 class="font-semibold text-lg">Still connecting…</h3>
+          <p class="text-gray-600 mt-1">Your network is slow or blocking Firebase. Retrying…</p>
+        </div>
+      `;
+      const [byKeyRes2, legacyRes2] = await Promise.all([
+        getSnapWithTimeout(db.collection('candidates').where('positionKey', '==', positionKey).get(), 35000),
+        getSnapWithTimeout(db.collection('candidates').where('position', '==', position).get(), 35000)
+      ]);
+      byKeySnap = byKeyRes2.snap;
+      legacySnap = legacyRes2.snap;
+      candidatesErr = byKeyRes2.error || legacyRes2.error || candidatesErr;
+    }
+  }
 
   if (voterSnap && voterSnap.exists) {
     const voter = voterSnap.data() || {};
@@ -237,7 +264,8 @@ async function loadElectionAndCandidates() {
 
   grid.innerHTML = '';
   if (!byKeySnap && !legacySnap) {
-    const allSnap = await withTimeout(db.collection('candidates').get(), 8000).catch(() => null);
+    const allRes = await getSnapWithTimeout(db.collection('candidates').get(), 30000);
+    const allSnap = allRes.snap;
     if (allSnap) {
       const fallback = [];
       allSnap.forEach((d) => {
@@ -270,7 +298,7 @@ async function loadElectionAndCandidates() {
     grid.innerHTML = `
         <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
           <h3 class="font-semibold text-lg">Could not load candidates</h3>
-          <p class="text-gray-600 mt-1">Check your internet connection and refresh.</p>
+          <p class="text-gray-600 mt-1">${safeErrorMessage(candidatesErr || allRes.error || new Error('timeout'))}</p>
           <button class="mt-4 mciu-btn px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
         </div>
       `;
