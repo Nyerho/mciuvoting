@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="tailwind.css">
 </head>
 
-<body class="bg-secondary min-h-screen">
+<body class="mciu-theme min-h-screen">
 
 <header class="bg-white shadow">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -32,7 +32,7 @@
     <input id="voterName" type="text" class="w-full border px-3 py-2 rounded mb-4" placeholder="Enter your full name">
     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
       <button onclick="closeModal()" class="w-full border py-2 rounded">Cancel</button>
-      <button onclick="submitVote()" class="w-full bg-primary text-white py-2 rounded">Confirm</button>
+      <button onclick="submitVote()" class="w-full mciu-btn py-2 rounded">Confirm</button>
     </div>
   </div>
 </div>
@@ -271,7 +271,7 @@ async function loadElectionAndCandidates() {
         <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
           <h3 class="font-semibold text-lg">Could not load candidates</h3>
           <p class="text-gray-600 mt-1">Check your internet connection and refresh.</p>
-          <button class="mt-4 bg-primary text-white px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
+          <button class="mt-4 mciu-btn px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
         </div>
       `;
       return;
@@ -289,13 +289,13 @@ async function loadElectionAndCandidates() {
   }
   candidates.forEach(candidate => {
     const card = document.createElement('div');
-    card.className = 'bg-white rounded-xl shadow p-6 text-center';
+    card.className = 'bg-white rounded-xl shadow p-6 text-center mciu-card transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-lg';
     const image = candidate.image || avatarDataUri(candidate.name);
 
     card.innerHTML = `
       <img src="${image}" loading="lazy" class="w-24 h-24 sm:w-32 sm:h-32 mx-auto rounded-full object-cover">
       <h3 class="mt-4 font-semibold">${candidate.name}</h3>
-      <button class="mt-6 w-full bg-primary text-white py-2 rounded">
+      <button class="mt-6 w-full mciu-btn py-2 rounded">
         Vote
       </button>
     `;
@@ -310,7 +310,7 @@ loadElectionAndCandidates().catch((e) => {
     <div class="bg-white rounded-xl shadow p-6 md:col-span-3">
       <h3 class="font-semibold text-lg">Could not load candidates</h3>
       <p class="text-gray-600 mt-1">${safeErrorMessage(e)}</p>
-      <button class="mt-4 bg-primary text-white px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
+      <button class="mt-4 mciu-btn px-5 py-2 rounded" onclick="window.location.reload()">Retry</button>
     </div>
   `;
 });

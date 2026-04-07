@@ -13,12 +13,12 @@
 </style>
 </head>
 
-<body class="bg-secondary min-h-screen">
+<body class="mciu-theme min-h-screen">
 
 <header class="bg-white shadow-sm">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
     <div class="flex items-center gap-3">
-      <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold">M</div>
+      <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold mciu-logo">M</div>
       <div>
         <h1 class="font-semibold">MCIU Voting Portal</h1>
         <p class="text-xs text-gray-500">Natural & Applied Sciences</p>
@@ -35,15 +35,15 @@
   </div>
 
   <div class="grid md:grid-cols-3 gap-6 mb-12">
-    <div class="bg-white rounded-xl shadow p-6">
+    <div class="bg-white rounded-xl shadow p-6 mciu-card">
       <p class="text-gray-500 text-sm">Election</p>
       <h3 class="text-lg font-semibold mt-1">Natural & Applied Sciences</h3>
     </div>
-    <div class="bg-white rounded-xl shadow p-6">
+    <div class="bg-white rounded-xl shadow p-6 mciu-card">
       <p class="text-gray-500 text-sm">Status</p>
       <h3 id="votingStatus" class="text-lg font-semibold mt-1 text-green-600">Voting Active</h3>
     </div>
-    <div class="bg-white rounded-xl shadow p-6">
+    <div class="bg-white rounded-xl shadow p-6 mciu-card">
       <p class="text-gray-500 text-sm">Voting Progress</p>
       <h3 id="progressStatus" class="text-lg font-semibold mt-1">Not Voted</h3>
     </div>
@@ -52,7 +52,7 @@
   <div class="bg-white rounded-2xl shadow p-8">
     <h3 class="text-xl font-semibold mb-6">Available Positions</h3>
     <div id="positionsList" class="space-y-4 fade-in"></div>
-    <button id="doneVotingBtn" class="hidden mt-6 w-full bg-green-600 text-white py-3 rounded-lg text-lg hover:bg-green-700 transition">Done Voting</button>
+    <button id="doneVotingBtn" class="hidden mt-6 w-full mciu-btn py-3 rounded-lg text-lg transition">Done Voting</button>
     <p class="mt-8 text-sm text-gray-500">⚠ Once you vote for a position, it cannot be changed.</p>
   </div>
 
@@ -223,7 +223,7 @@ function renderPositions(positions, electionStatus, userVotes, candidateCounts) 
         <h4 class="font-medium">${position}</h4>
         <p class="text-sm text-gray-500">${count ? `${count} nominated candidate${count === 1 ? '' : 's'}` : 'No nominated candidates yet'}</p>
       </div>
-      <a href="${href}" class="vote-btn bg-primary text-white px-5 py-2 rounded-lg hover:bg-blue-900 transition w-full sm:w-auto text-center">Vote</a>
+      <a href="${href}" class="vote-btn mciu-btn px-5 py-2 rounded-lg transition w-full sm:w-auto text-center">Vote</a>
     `;
 
     positionsList.appendChild(card);
