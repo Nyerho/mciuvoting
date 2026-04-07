@@ -29,6 +29,7 @@
 <div id="voteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
   <div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4 text-center">
     <p id="confirmText" class="mb-6 text-gray-700"></p>
+    <input id="voterName" type="text" class="w-full border px-3 py-2 rounded mb-4" placeholder="Enter your full name">
     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
       <button onclick="closeModal()" class="w-full border py-2 rounded">Cancel</button>
       <button onclick="submitVote()" class="w-full bg-primary text-white py-2 rounded">Confirm</button>
@@ -322,6 +323,11 @@ function confirmVote(id) {
   document.getElementById('confirmText').innerText =
     `You are about to vote for this candidate as ${position}`;
   requestAnimationFrame(() => {
+    const nameInput = document.getElementById('voterName');
+    try {
+      const u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (u && u.name && nameInput) nameInput.value = String(u.name);
+    } catch {}
     document.getElementById('voteModal').classList.remove('hidden');
     document.getElementById('voteModal').classList.add('flex');
   });
@@ -356,6 +362,21 @@ window.submitVote = function () {
     const legacyVoteId = `${safeMatric}_${position.replace(/[\/#?\[\]]/g, '_')}`;
     const legacyVoteRef = legacyVoteId === voteId ? null : db.collection('votes').doc(legacyVoteId);
     const candidateRef = db.collection('candidates').doc(selectedCandidateId);
+    const voterName = String(document.getElementById('voterName')?.value || '').trim().replace(/\s+/g, ' ');
+    if (!voterName) throw new Error('Enter your name to continue');
+    try {
+      const u = JSON.parse(localStorage.getItem('currentUser') || 'null') || {};
+      u.name = voterName;
+      localStorage.setItem('currentUser', JSON.stringify(u));
+    } catch {}
+    try {
+      await db.collection('voters').doc(safeDocId(matric)).set({
+        matric,
+        faculty: 'NS',
+        name: voterName,
+        lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch {}
 
     await db.runTransaction(async (tx) => {
       const existingVote = await tx.get(voteRef);
@@ -372,6 +393,7 @@ window.submitVote = function () {
       tx.update(candidateRef, { votes: currentVotes + 1 });
       tx.set(voteRef, {
         matric,
+        voterName,
         position,
         positionKey,
         candidateId: selectedCandidateId,

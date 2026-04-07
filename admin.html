@@ -70,6 +70,7 @@
           <thead class="bg-secondary text-left">
             <tr>
               <th class="p-3 whitespace-nowrap">Matric No</th>
+              <th class="p-3 whitespace-nowrap">Name</th>
               <th class="p-3 whitespace-nowrap">Position</th>
               <th class="p-3 whitespace-nowrap">Voted For</th>
             </tr>
@@ -86,6 +87,7 @@
           <thead class="bg-secondary text-left">
             <tr>
               <th class="p-3 whitespace-nowrap">Matric No</th>
+              <th class="p-3 whitespace-nowrap">Name</th>
               <th class="p-3 whitespace-nowrap">Status</th>
               <th class="p-3 whitespace-nowrap">Completed At</th>
             </tr>
@@ -554,12 +556,14 @@
         snap.forEach(s => {
           const v = s.data() || {};
           const matric = v.matric || '';
+          const name = v.voterName || '';
           const position = v.position || '';
           const votedFor = v.candidateName || v.candidateId || '';
           const tr = document.createElement('tr');
           tr.className = 'border-t';
           tr.innerHTML = `
             <td class="p-3 whitespace-nowrap">${matric}</td>
+            <td class="p-3 whitespace-nowrap">${name}</td>
             <td class="p-3 whitespace-nowrap">${position}</td>
             <td class="p-3 whitespace-nowrap">${votedFor}</td>
           `;
@@ -568,7 +572,7 @@
       } catch (e) {
         const tr = document.createElement('tr');
         tr.className = 'border-t';
-        tr.innerHTML = `<td class="p-3 text-red-700" colspan="3">Could not load votes: ${safeErrorMessage(e)}</td>`;
+        tr.innerHTML = `<td class="p-3 text-red-700" colspan="4">Could not load votes: ${safeErrorMessage(e)}</td>`;
         votesTableBody.appendChild(tr);
       }
     }
@@ -580,12 +584,14 @@
         snap.forEach(s => {
           const v = s.data() || {};
           const matric = v.matric || s.id || '';
+          const name = v.name || '';
           const status = v.completedAt ? 'COMPLETED' : 'ACTIVE';
           const completedAt = formatTimestamp(v.completedAt);
           const tr = document.createElement('tr');
           tr.className = 'border-t';
           tr.innerHTML = `
             <td class="p-3 whitespace-nowrap">${matric}</td>
+            <td class="p-3 whitespace-nowrap">${name}</td>
             <td class="p-3 whitespace-nowrap">${status}</td>
             <td class="p-3 whitespace-nowrap">${completedAt}</td>
           `;
@@ -594,7 +600,7 @@
       } catch (e) {
         const tr = document.createElement('tr');
         tr.className = 'border-t';
-        tr.innerHTML = `<td class="p-3 text-red-700" colspan="3">Could not load voters: ${safeErrorMessage(e)}</td>`;
+        tr.innerHTML = `<td class="p-3 text-red-700" colspan="4">Could not load voters: ${safeErrorMessage(e)}</td>`;
         votersTableBody.appendChild(tr);
       }
     }
