@@ -82,6 +82,10 @@
       <hr class="my-6">
 
       <h2 class="text-xl font-semibold mb-4">Registered Voters</h2>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <p class="text-sm text-gray-600">Delete fake/unverified voters or restart voting (clears votes + voters).</p>
+        <button id="restartVotingBtn" class="bg-gray-900 text-white px-4 py-2 rounded w-full sm:w-auto">Restart Voting</button>
+      </div>
       <div class="overflow-auto border rounded">
         <table class="w-full text-sm min-w-max">
           <thead class="bg-secondary text-left">
@@ -90,6 +94,7 @@
               <th class="p-3 whitespace-nowrap">Name</th>
               <th class="p-3 whitespace-nowrap">Status</th>
               <th class="p-3 whitespace-nowrap">Completed At</th>
+              <th class="p-3 whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody id="votersTableBody"></tbody>
@@ -139,6 +144,7 @@
     const candidateList = document.getElementById('candidateList');
     const votesTableBody = document.getElementById('votesTableBody');
     const votersTableBody = document.getElementById('votersTableBody');
+    const restartVotingBtn = document.getElementById('restartVotingBtn');
 
     let cachedPositions = [...defaultPositions];
 
@@ -587,6 +593,8 @@
           const name = v.name || '';
           const status = v.completedAt ? 'COMPLETED' : 'ACTIVE';
           const completedAt = formatTimestamp(v.completedAt);
+          const docId = s.id;
+          const voteMatric = v.matric || '';
           const tr = document.createElement('tr');
           tr.className = 'border-t';
           tr.innerHTML = `
@@ -594,14 +602,50 @@
             <td class="p-3 whitespace-nowrap">${name}</td>
             <td class="p-3 whitespace-nowrap">${status}</td>
             <td class="p-3 whitespace-nowrap">${completedAt}</td>
+            <td class="p-3 whitespace-nowrap"><button class="text-red-700 text-sm">Delete</button></td>
           `;
+          tr.querySelector('button').onclick = () => deleteVoter(docId, voteMatric);
           votersTableBody.appendChild(tr);
         });
       } catch (e) {
         const tr = document.createElement('tr');
         tr.className = 'border-t';
-        tr.innerHTML = `<td class="p-3 text-red-700" colspan="4">Could not load voters: ${safeErrorMessage(e)}</td>`;
+        tr.innerHTML = `<td class="p-3 text-red-700" colspan="5">Could not load voters: ${safeErrorMessage(e)}</td>`;
         votersTableBody.appendChild(tr);
+      }
+    }
+
+    async function deleteVoter(voterDocId, matric) {
+      if (!confirm('Delete this voter? This will also remove their vote records.')) return;
+      try {
+        await withTimeout(db.collection('voters').doc(voterDocId).delete(), 7000);
+        if (matric) {
+          const votesSnap = await withTimeout(db.collection('votes').where('matric', '==', matric).get(), 9000);
+          if (!votesSnap.empty) {
+            const batch = db.batch();
+            votesSnap.docs.forEach(d => batch.delete(d.ref));
+            await withTimeout(batch.commit(), 9000);
+          }
+        }
+        showToast('Voter deleted');
+        await Promise.allSettled([renderRegisteredVoters(), renderVoteRecords()]);
+      } catch (e) {
+        showToast(`Could not delete voter: ${safeErrorMessage(e)}`, 'error');
+      }
+    }
+
+    async function restartVoting() {
+      if (!confirm('Restart voting? This will delete ALL votes and ALL registered voters (candidates remain).')) return;
+      setButtonLoading(restartVotingBtn, true, 'Restarting...', 'Restart Voting');
+      try {
+        await deleteCollection('votes');
+        await deleteCollection('voters');
+        showToast('Voting restarted (votes + voters cleared)');
+        await Promise.allSettled([renderVoteRecords(), renderRegisteredVoters()]);
+      } catch (e) {
+        showToast(`Could not restart voting: ${safeErrorMessage(e)}`, 'error');
+      } finally {
+        setButtonLoading(restartVotingBtn, false, 'Restarting...', 'Restart Voting');
       }
     }
 
@@ -627,6 +671,7 @@
     resetBtn.onclick = () => resetElection();
     addPositionBtn.onclick = () => addPosition();
     addCandidateBtn.onclick = () => addCandidate();
+    if (restartVotingBtn) restartVotingBtn.onclick = () => restartVoting();
 
     window.addCandidate = addCandidate;
     window.deleteCandidate = deleteCandidate;
