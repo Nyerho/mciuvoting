@@ -392,6 +392,20 @@
       await deleteCollection(name);
     }
 
+    async function resetCandidateVotes() {
+      let lastDocId = null;
+      for (;;) {
+        let q = db.collection('candidates').orderBy(firebase.firestore.FieldPath.documentId()).limit(450);
+        if (lastDocId) q = q.startAfter(lastDocId);
+        const snap = await q.get();
+        if (snap.empty) return;
+        const batch = db.batch();
+        snap.docs.forEach(d => batch.update(d.ref, { votes: 0 }));
+        await batch.commit();
+        lastDocId = snap.docs[snap.docs.length - 1].id;
+      }
+    }
+
     async function resetElection() {
       if (!confirm('Reset election? This deletes candidates, votes and registered voters.')) return;
       setButtonLoading(resetBtn, true, 'Resetting...', 'Reset Election');
@@ -640,8 +654,9 @@
       try {
         await deleteCollection('votes');
         await deleteCollection('voters');
-        showToast('Voting restarted (votes + voters cleared)');
-        await Promise.allSettled([renderVoteRecords(), renderRegisteredVoters()]);
+        await resetCandidateVotes();
+        showToast('Voting restarted (votes + voters cleared, candidate counts reset)');
+        await Promise.allSettled([renderCandidates(), renderVoteRecords(), renderRegisteredVoters()]);
       } catch (e) {
         showToast(`Could not restart voting: ${safeErrorMessage(e)}`, 'error');
       } finally {
