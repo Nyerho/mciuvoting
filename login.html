@@ -81,7 +81,7 @@ try {
   db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 } catch {}
 
-const ADMIN_EMAIL = 'admin@mciuvoting.com';
+const ADMIN_EMAIL = 'admin@mciusrcelection.com';
 
 const form = document.querySelector('form');
 const matricInput = document.getElementById('matric');
@@ -111,7 +111,7 @@ function safeDocId(value) {
 
 matricInput.addEventListener('input', () => {
   const v = String(matricInput.value || '').trim().toLowerCase();
-  if (v === 'admin' || v.startsWith('admin@')) {
+  if (v === ADMIN_EMAIL.toLowerCase()) {
     adminPasswordWrap.classList.remove('hidden');
     passwordInput.focus();
   } else {
@@ -145,15 +145,14 @@ form.addEventListener('submit', e => {
   try { auth.signOut(); } catch {}
 
   /* ===== ADMIN ===== */
-  if (matric.toLowerCase() === 'admin' || matric.toLowerCase().startsWith('admin@')) {
+  if (matric.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
     (async () => {
       if (!password) {
         alert('Enter admin password');
         resetSubmit();
         return;
       }
-      const email = matric.toLowerCase() === 'admin' ? ADMIN_EMAIL : matric.trim();
-      const cred = await auth.signInWithEmailAndPassword(email, password);
+      const cred = await auth.signInWithEmailAndPassword(ADMIN_EMAIL, password);
       const uid = cred?.user?.uid || '';
       localStorage.setItem('currentUser', JSON.stringify({
         matric: 'ADMIN',
