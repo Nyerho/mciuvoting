@@ -11,7 +11,9 @@
   <header class="bg-white shadow-sm">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-primary text-white flex items-center justify-center rounded-full font-bold mciu-logo">M</div>
+        <a href="index.html" class="shrink-0" aria-label="Home">
+          <img src="images/mciu%20logo.jpg" alt="MCIU Logo" width="40" height="40" class="mciu-logo mciu-brand-img">
+        </a>
         <div>
           <h1 class="text-lg font-semibold text-gray-900">Admin Dashboard</h1>
           <p class="text-xs text-gray-500">MCIU Voting Portal</p>
@@ -69,6 +71,10 @@
       <hr class="my-6">
 
       <h2 class="text-xl font-semibold mb-4">Vote Records</h2>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <p class="text-sm text-gray-600">Download voting data for analysis.</p>
+        <button id="downloadCsvBtn" class="mciu-btn px-4 py-2 rounded w-full sm:w-auto">Download CSV</button>
+      </div>
       <div class="overflow-auto border rounded">
         <table class="w-full text-sm min-w-max">
           <thead class="bg-secondary text-left">
@@ -150,6 +156,7 @@
     const votersTableBody = document.getElementById('votersTableBody');
     const restartVotingBtn = document.getElementById('restartVotingBtn');
     const restoreCandidatesBtn = document.getElementById('restoreCandidatesBtn');
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 
     let cachedPositions = [...defaultPositions];
 
@@ -327,6 +334,90 @@
         return '';
       } catch {
         return '';
+      }
+    }
+
+    function toCsvCell(value) {
+      const s = String(value ?? '');
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
+    function downloadTextFile(filename, text, mime) {
+      const blob = new Blob([text], { type: mime || 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    async function downloadVotingCsv() {
+      setButtonLoading(downloadCsvBtn, true, 'Preparing...', 'Download CSV');
+      try {
+        const votesSnap = await withTimeout(db.collection('votes').orderBy('createdAt', 'desc').get(), 20000);
+        const votersSnap = await withTimeout(db.collection('voters').get(), 20000);
+        const candidatesSnap = await withTimeout(db.collection('candidates').get(), 20000);
+
+        const votersByMatric = {};
+        votersSnap.forEach(d => {
+          const v = d.data() || {};
+          const matric = String(v.matric || '').trim().toUpperCase();
+          if (!matric) return;
+          votersByMatric[matric] = {
+            name: v.name || '',
+            completedAt: formatTimestamp(v.completedAt) || ''
+          };
+        });
+
+        const candidatesById = {};
+        candidatesSnap.forEach(d => {
+          const c = d.data() || {};
+          candidatesById[d.id] = {
+            candidateName: c.name || '',
+            position: c.position || '',
+            positionKey: c.positionKey || ''
+          };
+        });
+
+        const rows = [];
+        votesSnap.forEach(d => {
+          const v = d.data() || {};
+          const matric = String(v.matric || '').trim().toUpperCase();
+          const voterName = v.voterName || votersByMatric[matric]?.name || '';
+          const position = v.position || candidatesById[v.candidateId]?.position || '';
+          const positionKey = v.positionKey || candidatesById[v.candidateId]?.positionKey || '';
+          const candidateId = v.candidateId || '';
+          const candidateName = v.candidateName || candidatesById[candidateId]?.candidateName || '';
+          const votedAt = formatTimestamp(v.createdAt) || '';
+          const completedAt = votersByMatric[matric]?.completedAt || '';
+          rows.push({
+            matric,
+            voterName,
+            position,
+            positionKey,
+            candidateId,
+            candidateName,
+            votedAt,
+            completedAt
+          });
+        });
+
+        const header = ['matric', 'voterName', 'position', 'positionKey', 'candidateId', 'candidateName', 'votedAt', 'completedAt'];
+        const csv = [header.join(',')]
+          .concat(rows.map(r => header.map(k => toCsvCell(r[k])).join(',')))
+          .join('\n');
+
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        downloadTextFile(`mciu-votes-${stamp}.csv`, csv, 'text/csv;charset=utf-8');
+        showToast('CSV downloaded');
+      } catch (e) {
+        showToast(`Could not download CSV: ${safeErrorMessage(e)}`, 'error');
+      } finally {
+        setButtonLoading(downloadCsvBtn, false, 'Preparing...', 'Download CSV');
       }
     }
 
@@ -733,6 +824,7 @@
     addCandidateBtn.onclick = () => addCandidate();
     if (restartVotingBtn) restartVotingBtn.onclick = () => restartVoting();
     if (restoreCandidatesBtn) restoreCandidatesBtn.onclick = () => restoreCandidates();
+    if (downloadCsvBtn) downloadCsvBtn.onclick = () => downloadVotingCsv();
 
     window.addCandidate = addCandidate;
     window.deleteCandidate = deleteCandidate;
